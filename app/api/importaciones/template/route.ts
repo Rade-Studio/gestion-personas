@@ -16,7 +16,9 @@ export async function GET() {
       { header: 'Número de Celular', key: 'numero_celular', width: 18 },
       { header: 'Dirección', key: 'direccion', width: 30 },
       { header: 'Barrio', key: 'barrio', width: 20 },
-      { header: 'Puesto de Votación', key: 'puesto_votacion', width: 22 },
+      { header: 'Departamento', key: 'departamento', width: 20 },
+      { header: 'Municipio', key: 'municipio', width: 20 },
+      { header: 'Puesto de Votación', key: 'puesto_votacion', width: 20 },
       { header: 'Mesa de Votación', key: 'mesa_votacion', width: 20 },
     ]
 
@@ -38,8 +40,10 @@ export async function GET() {
       numero_celular: 'Ejemplo: 3001234567',
       direccion: 'Ejemplo: Calle 123 #45-67',
       barrio: 'Ejemplo: Centro',
-      puesto_votacion: 'Ejemplo: Puesto 1',
-      mesa_votacion: 'Ejemplo: Mesa 1',
+      departamento: 'Ejemplo: Cundinamarca',
+      municipio: 'Ejemplo: Bogotá',
+      puesto_votacion: 'Ejemplo: 001',
+      mesa_votacion: 'Ejemplo: 01',
     })
 
     // Add instructions row
@@ -52,17 +56,30 @@ export async function GET() {
       numero_celular: '',
       direccion: '',
       barrio: '',
+      departamento: '',
+      municipio: '',
       puesto_votacion: '',
       mesa_votacion: '',
     })
 
     const buffer = await workbook.xlsx.writeBuffer()
 
+    // Generate timestamp for filename (DDMMYYYYHHMMSS)
+    const now = new Date()
+    const day = String(now.getDate()).padStart(2, '0')
+    const month = String(now.getMonth() + 1).padStart(2, '0')
+    const year = now.getFullYear()
+    const hours = String(now.getHours()).padStart(2, '0')
+    const minutes = String(now.getMinutes()).padStart(2, '0')
+    const seconds = String(now.getSeconds()).padStart(2, '0')
+    const timestamp = `${day}${month}${year}${hours}${minutes}${seconds}`
+    const filename = `plantilla-personas-${timestamp}.xlsx`
+
     return new NextResponse(buffer, {
       headers: {
         'Content-Type':
           'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'Content-Disposition': 'attachment; filename="plantilla-personas.xlsx"',
+        'Content-Disposition': `attachment; filename="${filename}"`,
       },
     })
   } catch (error: any) {
