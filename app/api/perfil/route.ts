@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { requireLiderOrAdmin, getCurrentProfile } from '@/lib/auth/helpers'
-import { liderSchema } from '@/lib/validations/lider'
+import { liderSchema } from '@/features/lideres/validations/lider'
 
 export async function PUT(request: NextRequest) {
   try {

@@ -16,8 +16,8 @@ import {
 } from '@/components/ui/select'
 import { AlertCircle, CheckCircle2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { useAuth } from '@/hooks/use-auth'
-import { documentoTipos } from '@/lib/validations/persona'
+import { useAuth } from '@/features/auth/hooks/use-auth'
+import { documentoTipos } from '@/features/personas/validations/persona'
 
 export default function FixRolePage() {
   const { profile, loading } = useAuth()

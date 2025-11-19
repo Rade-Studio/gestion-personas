@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { MainLayout } from '@/components/layout/main-layout'
-import { ProfileSetup } from '@/components/auth/profile-setup'
+import { ProfileSetup } from '@/features/auth/components/profile-setup'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Users, CheckCircle2, XCircle } from 'lucide-react'

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAuth } from '@/hooks/use-auth'
+import { useAuth } from '@/features/auth/hooks/use-auth'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,

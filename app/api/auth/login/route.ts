@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { loginSchema } from '@/lib/validations/auth'
+import { loginSchema } from '@/features/auth/validations/auth'
 
 export async function POST(request: NextRequest) {
   try {

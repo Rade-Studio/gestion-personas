@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireAdmin } from '@/lib/auth/helpers'
-import { liderSchema } from '@/lib/validations/lider'
+import { liderSchema } from '@/features/lideres/validations/lider'
 
 export async function GET(request: NextRequest) {
   try {

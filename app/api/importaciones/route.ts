@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { requireLiderOrAdmin, getCurrentProfile } from '@/lib/auth/helpers'
 import ExcelJS from 'exceljs'
-import { personaSchema } from '@/lib/validations/persona'
+import { personaSchema } from '@/features/personas/validations/persona'
 
 export async function POST(request: NextRequest) {
   try {

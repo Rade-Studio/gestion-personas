@@ -2,10 +2,10 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { MainLayout } from '@/components/layout/main-layout'
-import { PersonaForm } from '@/components/personas/persona-form'
-import { PersonasTable } from '@/components/personas/personas-table'
-import { PersonasFilters } from '@/components/personas/personas-filters'
-import { ConfirmarVotoDialog } from '@/components/personas/confirmar-voto-dialog'
+import { PersonaForm } from '@/features/personas/components/persona-form'
+import { PersonasTable } from '@/features/personas/components/personas-table'
+import { PersonasFilters } from '@/features/personas/components/personas-filters'
+import { ConfirmarVotoDialog } from '@/features/personas/components/confirmar-voto-dialog'
 import { Button } from '@/components/ui/button'
 import { Plus, Download, Upload, CheckCircle2, XCircle, Users } from 'lucide-react'
 import { toast } from 'sonner'
@@ -30,7 +30,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { useAuth } from '@/hooks/use-auth'
+import { useAuth } from '@/features/auth/hooks/use-auth'
 
 export default function PersonasPage() {
   const { profile } = useAuth()
