@@ -51,6 +51,8 @@ export function PersonaForm({
       numero_celular: '',
       direccion: '',
       barrio: '',
+      departamento: '',
+      municipio: '',
       puesto_votacion: '',
       mesa_votacion: '',
     },
@@ -68,6 +70,8 @@ export function PersonaForm({
         numero_celular: initialData.numero_celular || '',
         direccion: initialData.direccion || '',
         barrio: initialData.barrio || '',
+        departamento: initialData.departamento || '',
+        municipio: initialData.municipio || '',
         puesto_votacion: initialData.puesto_votacion || '',
         mesa_votacion: initialData.mesa_votacion || '',
       })
@@ -81,6 +85,8 @@ export function PersonaForm({
         numero_celular: '',
         direccion: '',
         barrio: '',
+        departamento: '',
+        municipio: '',
         puesto_votacion: '',
         mesa_votacion: '',
       })
@@ -260,10 +266,39 @@ export function PersonaForm({
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
+                name="departamento"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Departamento</FormLabel>
+                    <FormControl>
+                      <Input {...field} disabled={loading} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="municipio"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Municipio</FormLabel>
+                    <FormControl>
+                      <Input {...field} disabled={loading} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
                 name="puesto_votacion"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Puesto de Votación *</FormLabel>
+                    <FormLabel>Puesto de Votación</FormLabel>
                     <FormControl>
                       <Input {...field} disabled={loading} />
                     </FormControl>
@@ -276,7 +311,7 @@ export function PersonaForm({
                 name="mesa_votacion"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Mesa de Votación *</FormLabel>
+                    <FormLabel>Mesa de Votación</FormLabel>
                     <FormControl>
                       <Input {...field} disabled={loading} />
                     </FormControl>

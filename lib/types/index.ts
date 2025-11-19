@@ -25,8 +25,10 @@ export interface Persona {
   numero_celular?: string
   direccion?: string
   barrio?: string
-  puesto_votacion: string
-  mesa_votacion: string
+  departamento?: string
+  municipio?: string
+  puesto_votacion?: string
+  mesa_votacion?: string
   registrado_por: string
   es_importado: boolean
   importacion_id?: string

@@ -13,8 +13,10 @@ export const personaSchema = z.object({
   numero_celular: z.string().optional().or(z.literal('')),
   direccion: z.string().optional().or(z.literal('')),
   barrio: z.string().optional().or(z.literal('')),
-  puesto_votacion: z.string().min(1, 'El puesto de votación es obligatorio'),
-  mesa_votacion: z.string().min(1, 'La mesa de votación es obligatoria'),
+  departamento: z.string().optional().or(z.literal('')),
+  municipio: z.string().optional().or(z.literal('')),
+  puesto_votacion: z.string().optional().or(z.literal('')),
+  mesa_votacion: z.string().optional().or(z.literal('')),
 })
 
 export type PersonaFormData = z.infer<typeof personaSchema>
