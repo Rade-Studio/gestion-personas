@@ -7,9 +7,10 @@ import { PersonasTable } from '@/features/personas/components/personas-table'
 import { PersonasFilters } from '@/features/personas/components/personas-filters'
 import { ConfirmarVotoDialog } from '@/features/personas/components/confirmar-voto-dialog'
 import { Button } from '@/components/ui/button'
-import { Plus, Download, Upload, CheckCircle2, XCircle, Users } from 'lucide-react'
+import { Plus, Download, Upload, CheckCircle2, XCircle, Users, AlertCircle, Info } from 'lucide-react'
 import { toast } from 'sonner'
-import type { PersonaWithConfirmacion, PersonaFormData } from '@/lib/types'
+import type { PersonaWithConfirmacion } from '@/lib/types'
+import type { PersonaFormData } from '@/features/personas/validations/persona'
 import {
   Dialog,
   DialogContent,
@@ -30,6 +31,8 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
+import { Card, CardContent } from '@/components/ui/card'
 import { useAuth } from '@/features/auth/hooks/use-auth'
 
 export default function PersonasPage() {
@@ -48,23 +51,42 @@ export default function PersonasPage() {
   const [puestosVotacion, setPuestosVotacion] = useState<string[]>([])
   const [mesasVotacion, setMesasVotacion] = useState<string[]>([])
   const [lideres, setLideres] = useState<Array<{ id: string; nombres: string; apellidos: string }>>([])
+  const [stats, setStats] = useState({
+    total: 0,
+    datosFaltantes: 0,
+    pendientes: 0,
+    confirmadas: 0,
+  })
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [personaToDelete, setPersonaToDelete] = useState<string | null>(null)
   const [reversarDialogOpen, setReversarDialogOpen] = useState(false)
   const [personaToReversar, setPersonaToReversar] = useState<PersonaWithConfirmacion | null>(null)
+  const [importReportOpen, setImportReportOpen] = useState(false)
+  const [importReport, setImportReport] = useState<{
+    registros_exitosos: number
+    registros_actualizados: number
+    registros_creados: number
+    registros_omitidos: number
+    documentos_omitidos?: string[]
+    registros_fallidos: number
+    errores?: Array<{ row?: number; error: string; tipo?: string; numero_documento?: string }>
+  } | null>(null)
 
   // Serializar filters para comparación estable
   const filtersString = useMemo(() => JSON.stringify(filters), [filters])
   const prevFiltersStringRef = useRef<string>('')
   const prevPageRef = useRef<number>(1)
 
-  const fetchPersonas = useCallback(async () => {
+  const fetchPersonas = useCallback(async (currentPage?: number, currentFilters?: any) => {
     setLoading(true)
     try {
+      const pageToUse = currentPage ?? page
+      const filtersToUse = currentFilters ?? filters
+      
       const params = new URLSearchParams({
-        page: page.toString(),
+        page: pageToUse.toString(),
         limit: '10',
-        ...filters,
+        ...filtersToUse,
       })
 
       const response = await fetch(`/api/personas?${params}`)
@@ -81,7 +103,7 @@ export default function PersonasPage() {
     } finally {
       setLoading(false)
     }
-  }, [page, filtersString])
+  }, [page, filters])
 
   const fetchFilters = useCallback(async () => {
     try {
@@ -89,10 +111,32 @@ export default function PersonasPage() {
       const data = await response.json()
 
       if (data.data) {
-        const puestos = [...new Set(data.data.map((p: PersonaWithConfirmacion) => p.puesto_votacion))]
-        const mesas = [...new Set(data.data.map((p: PersonaWithConfirmacion) => p.mesa_votacion))]
-        setPuestosVotacion(puestos.sort())
-        setMesasVotacion(mesas.sort())
+        // Get unique puestos, normalize (trim) and filter out empty values
+        const puestosSet = new Set<string>()
+        data.data.forEach((p: PersonaWithConfirmacion) => {
+          if (p.puesto_votacion) {
+            const normalized = p.puesto_votacion.trim()
+            if (normalized) {
+              puestosSet.add(normalized)
+            }
+          }
+        })
+        const puestos = Array.from(puestosSet).sort()
+        
+        // Get unique mesas, normalize (trim) and filter out empty values
+        const mesasSet = new Set<string>()
+        data.data.forEach((p: PersonaWithConfirmacion) => {
+          if (p.mesa_votacion) {
+            const normalized = p.mesa_votacion.trim()
+            if (normalized) {
+              mesasSet.add(normalized)
+            }
+          }
+        })
+        const mesas = Array.from(mesasSet).sort()
+        
+        setPuestosVotacion(puestos)
+        setMesasVotacion(mesas)
       }
 
       // Cargar líderes si es admin
@@ -121,17 +165,72 @@ export default function PersonasPage() {
     }
   }, [profile?.role])
 
-  // Efecto para cargar personas solo cuando cambian page o filters
+  // Efecto para manejar cambios en filtros y página
   useEffect(() => {
     const filtersChanged = prevFiltersStringRef.current !== filtersString
     const pageChanged = prevPageRef.current !== page
     
+    // Si cambian los filtros y no estamos en página 1, resetear a página 1
+    if (filtersChanged && page !== 1) {
+      prevFiltersStringRef.current = filtersString
+      prevPageRef.current = 1 // Prevenir que el siguiente efecto detecte el cambio de página
+      setPage(1)
+      // Cargar datos con página 1 y los nuevos filtros inmediatamente
+      fetchPersonas(1, filters)
+      return
+    }
+    
+    // Si cambian los filtros o la página, cargar datos
     if (filtersChanged || pageChanged) {
       prevFiltersStringRef.current = filtersString
       prevPageRef.current = page
+      // Usar los valores actuales del estado
       fetchPersonas()
     }
-  }, [page, filtersString, fetchPersonas])
+  }, [page, filtersString, filters, fetchPersonas])
+
+  // Función para obtener estadísticas totales con filtros aplicados
+  const fetchStats = useCallback(async () => {
+    try {
+      const params = new URLSearchParams({
+        limit: '10000', // Obtener todas para contar
+        ...filters,
+      })
+
+      const response = await fetch(`/api/personas?${params}`)
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Error al cargar estadísticas')
+      }
+
+      const allPersonas = data.data || []
+      const total = allPersonas.length
+      const datosFaltantes = allPersonas.filter((p: PersonaWithConfirmacion) => !p.puesto_votacion || !p.mesa_votacion).length
+      const confirmadas = allPersonas.filter((p: PersonaWithConfirmacion) => 
+        p.puesto_votacion && p.mesa_votacion && 
+        p.confirmacion && !p.confirmacion.reversado
+      ).length
+      const pendientes = allPersonas.filter((p: PersonaWithConfirmacion) => 
+        p.puesto_votacion && p.mesa_votacion &&
+        (!p.confirmacion || p.confirmacion.reversado)
+      ).length
+
+      setStats({
+        total,
+        datosFaltantes,
+        pendientes,
+        confirmadas,
+      })
+    } catch (error) {
+      console.error('Error fetching stats:', error)
+    }
+  }, [filtersString])
+
+  // Cargar estadísticas cuando cambian los filtros
+  useEffect(() => {
+    fetchStats()
+  }, [filtersString, fetchStats])
 
   // Efecto para cargar filtros cuando profile esté disponible
   useEffect(() => {
@@ -258,10 +357,32 @@ export default function PersonasPage() {
     try {
       const response = await fetch('/api/importaciones/template')
       const blob = await response.blob()
+      
+      // Extract filename from Content-Disposition header or generate with timestamp
+      const contentDisposition = response.headers.get('Content-Disposition')
+      let filename = 'plantilla-personas.xlsx'
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="(.+)"/)
+        if (filenameMatch) {
+          filename = filenameMatch[1]
+        }
+      } else {
+        // Fallback: generate timestamp if header not available (DDMMYYYYHHMMSS)
+        const now = new Date()
+        const day = String(now.getDate()).padStart(2, '0')
+        const month = String(now.getMonth() + 1).padStart(2, '0')
+        const year = now.getFullYear()
+        const hours = String(now.getHours()).padStart(2, '0')
+        const minutes = String(now.getMinutes()).padStart(2, '0')
+        const seconds = String(now.getSeconds()).padStart(2, '0')
+        const timestamp = `${day}${month}${year}${hours}${minutes}${seconds}`
+        filename = `plantilla-personas-${timestamp}.xlsx`
+      }
+      
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = 'plantilla-personas.xlsx'
+      a.download = filename
       document.body.appendChild(a)
       a.click()
       window.URL.revokeObjectURL(url)
@@ -269,6 +390,68 @@ export default function PersonasPage() {
       toast.success('Plantilla descargada')
     } catch (error: any) {
       toast.error('Error al descargar plantilla')
+    }
+  }
+
+  const handleExportData = async () => {
+    try {
+      const params = new URLSearchParams()
+      
+      // Add active filters
+      if (filters.puesto_votacion) {
+        params.append('puesto_votacion', filters.puesto_votacion)
+      }
+      if (filters.numero_documento) {
+        params.append('numero_documento', filters.numero_documento)
+      }
+      if (filters.lider_id) {
+        params.append('lider_id', filters.lider_id)
+      }
+      if (filters.estado) {
+        params.append('estado', filters.estado)
+      }
+
+      const response = await fetch(`/api/importaciones/export?${params}`)
+      
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Error al exportar datos')
+      }
+
+      const blob = await response.blob()
+      
+      // Extract filename from Content-Disposition header or generate with timestamp
+      const contentDisposition = response.headers.get('Content-Disposition')
+      let filename = 'personas-exportadas.xlsx'
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="(.+)"/)
+        if (filenameMatch) {
+          filename = filenameMatch[1]
+        }
+      } else {
+        // Fallback: generate timestamp if header not available (DDMMYYYYHHMMSS)
+        const now = new Date()
+        const day = String(now.getDate()).padStart(2, '0')
+        const month = String(now.getMonth() + 1).padStart(2, '0')
+        const year = now.getFullYear()
+        const hours = String(now.getHours()).padStart(2, '0')
+        const minutes = String(now.getMinutes()).padStart(2, '0')
+        const seconds = String(now.getSeconds()).padStart(2, '0')
+        const timestamp = `${day}${month}${year}${hours}${minutes}${seconds}`
+        filename = `personas-exportadas-${timestamp}.xlsx`
+      }
+      
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      toast.success('Datos exportados exitosamente')
+    } catch (error: any) {
+      toast.error(error.message || 'Error al exportar datos', { duration: 8000 })
     }
   }
 
@@ -293,7 +476,9 @@ export default function PersonasPage() {
         throw new Error(result.error || 'Error al importar archivo')
       }
 
-      toast.success(`Importación completada: ${result.registros_exitosos} exitosos, ${result.registros_fallidos} fallidos`)
+      // Show report modal
+      setImportReport(result)
+      setImportReportOpen(true)
       setImportOpen(false)
       setImportFile(null)
       fetchPersonas()
@@ -302,9 +487,6 @@ export default function PersonasPage() {
     }
   }
 
-  const totalPersonas = personas.length
-  const confirmadas = personas.filter(p => p.confirmacion && !p.confirmacion.reversado).length
-  const pendientes = totalPersonas - confirmadas
 
   return (
     <MainLayout>
@@ -322,6 +504,10 @@ export default function PersonasPage() {
               <Download className="h-4 w-4 mr-2" />
               Plantilla
             </Button>
+            <Button variant="outline" onClick={handleExportData} size="sm">
+              <Download className="h-4 w-4 mr-2" />
+              Exportar Datos
+            </Button>
             <Button variant="outline" onClick={() => setImportOpen(true)} size="sm">
               <Upload className="h-4 w-4 mr-2" />
               Importar
@@ -334,15 +520,43 @@ export default function PersonasPage() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-4">
           <div className="rounded-xl border bg-card p-6">
             <div className="flex items-center justify-between">
               <div className="space-y-1">
                 <p className="text-sm font-medium text-muted-foreground">Total Registradas</p>
-                <p className="text-3xl font-semibold">{totalPersonas}</p>
+                <p className="text-3xl font-semibold">{stats.total}</p>
               </div>
               <div className="rounded-lg bg-primary/10 p-3">
                 <Users className="h-5 w-5 text-primary" />
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              setFilters({ estado: 'missing_data' })
+              setPage(1)
+            }}
+            className="rounded-xl border bg-card p-6 hover:bg-muted/50 transition-colors text-left w-full"
+          >
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-muted-foreground">Datos Faltantes</p>
+                <p className="text-3xl font-semibold text-destructive">{stats.datosFaltantes}</p>
+              </div>
+              <div className="rounded-lg bg-destructive/10 p-3">
+                <XCircle className="h-5 w-5 text-destructive" />
+              </div>
+            </div>
+          </button>
+          <div className="rounded-xl border bg-card p-6">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-muted-foreground">Pendientes</p>
+                <p className="text-3xl font-semibold text-[hsl(var(--warning))]">{stats.pendientes}</p>
+              </div>
+              <div className="rounded-lg bg-[hsl(var(--warning))]/10 p-3">
+                <XCircle className="h-5 w-5 text-[hsl(var(--warning))]" />
               </div>
             </div>
           </div>
@@ -350,21 +564,10 @@ export default function PersonasPage() {
             <div className="flex items-center justify-between">
               <div className="space-y-1">
                 <p className="text-sm font-medium text-muted-foreground">Confirmadas</p>
-                <p className="text-3xl font-semibold text-[hsl(var(--success))]">{confirmadas}</p>
+                <p className="text-3xl font-semibold text-[hsl(var(--success))]">{stats.confirmadas}</p>
               </div>
               <div className="rounded-lg bg-[hsl(var(--success))]/10 p-3">
                 <CheckCircle2 className="h-5 w-5 text-[hsl(var(--success))]" />
-              </div>
-            </div>
-          </div>
-          <div className="rounded-xl border bg-card p-6">
-            <div className="flex items-center justify-between">
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-muted-foreground">Pendientes</p>
-                <p className="text-3xl font-semibold text-[hsl(var(--warning))]">{pendientes}</p>
-              </div>
-              <div className="rounded-lg bg-[hsl(var(--warning))]/10 p-3">
-                <XCircle className="h-5 w-5 text-[hsl(var(--warning))]" />
               </div>
             </div>
           </div>
@@ -374,7 +577,7 @@ export default function PersonasPage() {
         <PersonasFilters
           onFilter={setFilters}
           puestosVotacion={puestosVotacion}
-          mesasVotacion={mesasVotacion}
+          mesasVotacion={[]}
           lideres={profile?.role === 'admin' ? lideres : undefined}
         />
 
@@ -504,6 +707,130 @@ export default function PersonasPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Import Report Dialog */}
+      <Dialog open={importReportOpen} onOpenChange={setImportReportOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh]">
+          <DialogHeader className="border-b pb-4">
+            <DialogTitle className="text-xl">Informe de Importación</DialogTitle>
+            <DialogDescription className="text-sm">
+              Resumen de la operación realizada
+            </DialogDescription>
+          </DialogHeader>
+          {importReport && (
+            <div className="space-y-5 overflow-y-auto max-h-[calc(90vh-180px)] pr-1">
+              {/* Summary Row */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex items-center gap-3 p-3 rounded-lg border">
+                  <div className="flex-shrink-0">
+                    <CheckCircle2 className="h-5 w-5 text-foreground" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-muted-foreground">Exitosos</p>
+                    <p className="text-lg font-semibold">{importReport.registros_exitosos}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-3 rounded-lg border">
+                  <div className="flex-shrink-0">
+                    <XCircle className="h-5 w-5 text-foreground" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-muted-foreground">Fallidos</p>
+                    <p className="text-lg font-semibold">{importReport.registros_fallidos}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Details */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between py-2 px-1">
+                  <span className="text-sm text-muted-foreground">Creados</span>
+                  <span className="text-sm font-medium">{importReport.registros_creados}</span>
+                </div>
+                <div className="flex items-center justify-between py-2 px-1">
+                  <span className="text-sm text-muted-foreground">Actualizados</span>
+                  <span className="text-sm font-medium">{importReport.registros_actualizados}</span>
+                </div>
+                {importReport.registros_omitidos > 0 && (
+                  <div className="flex items-center justify-between py-2 px-1">
+                    <span className="text-sm text-muted-foreground">Omitidos</span>
+                    <span className="text-sm font-medium">{importReport.registros_omitidos}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Omitted Documents */}
+              {importReport.documentos_omitidos && importReport.documentos_omitidos.length > 0 && (
+                <div className="space-y-2 pt-2 border-t">
+                  <div className="flex items-center gap-2">
+                    <Info className="h-4 w-4 text-muted-foreground" />
+                    <p className="text-sm font-medium">Documentos omitidos</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground pl-6">
+                    Tienen confirmación activa y no se actualizaron
+                  </p>
+                  <div className="max-h-24 overflow-y-auto rounded border p-2 bg-muted/20">
+                    <div className="flex flex-wrap gap-1.5">
+                      {importReport.documentos_omitidos.map((doc, idx) => (
+                        <span
+                          key={idx}
+                          className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono bg-background border"
+                        >
+                          {doc}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Errors */}
+              {importReport.errores && importReport.errores.length > 0 && (
+                <div className="space-y-2 pt-2 border-t">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 text-muted-foreground" />
+                    <p className="text-sm font-medium">Errores</p>
+                  </div>
+                  <div className="max-h-48 overflow-y-auto space-y-1.5">
+                    {importReport.errores.map((error, idx) => (
+                      <div
+                        key={idx}
+                        className="text-xs p-2.5 rounded border bg-muted/20"
+                      >
+                        <div className="flex items-start gap-2 mb-1">
+                          {error.row && (
+                            <span className="font-medium text-muted-foreground">Fila {error.row}</span>
+                          )}
+                          {error.numero_documento && (
+                            <span className="font-mono text-muted-foreground">{error.numero_documento}</span>
+                          )}
+                          {error.tipo && (
+                            <span className="text-muted-foreground">({error.tipo})</span>
+                          )}
+                        </div>
+                        <p className="text-muted-foreground">{error.error}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Success Message */}
+              {importReport.registros_fallidos === 0 && (
+                <div className="flex items-center gap-2 p-3 rounded-lg border bg-muted/20">
+                  <CheckCircle2 className="h-4 w-4 text-foreground flex-shrink-0" />
+                  <p className="text-sm font-medium">Importación completada sin errores</p>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter className="border-t pt-4">
+            <Button onClick={() => setImportReportOpen(false)}>
+              Cerrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </MainLayout>
   )
 }
