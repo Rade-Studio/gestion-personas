@@ -10,7 +10,6 @@ export async function GET(request: NextRequest) {
 
     const searchParams = request.nextUrl.searchParams
     const puestoVotacion = searchParams.get('puesto_votacion')
-    const mesaVotacion = searchParams.get('mesa_votacion')
     const numeroDocumento = searchParams.get('numero_documento')
     const liderId = searchParams.get('lider_id')
     const estado = searchParams.get('estado')
@@ -34,17 +33,13 @@ export async function GET(request: NextRequest) {
       query = query.eq('puesto_votacion', puestoVotacion)
     }
 
-    if (mesaVotacion) {
-      query = query.eq('mesa_votacion', mesaVotacion)
-    }
-
     if (numeroDocumento) {
       query = query.ilike('numero_documento', `%${numeroDocumento}%`)
     }
 
     // If filtering by estado, we need to get all matching records first, then filter in memory
-    // This is because estado is determined by the confirmacion relationship
-    const shouldFilterInMemory = estado === 'confirmed' || estado === 'pending'
+    // This is because estado is determined by the confirmacion relationship and missing_data
+    const shouldFilterInMemory = estado === 'confirmed' || estado === 'pending' || estado === 'missing_data'
     const queryLimit = shouldFilterInMemory ? 10000 : limit
     const queryOffset = shouldFilterInMemory ? 0 : offset
 
@@ -80,14 +75,20 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    // Filter by estado (confirmado/pendiente) if provided
-    if (estado === 'confirmed') {
+    // Filter by estado (missing_data/pendiente/confirmado) if provided
+    if (estado === 'missing_data') {
       transformedData = transformedData.filter((persona: any) => 
+        !persona.puesto_votacion || !persona.mesa_votacion
+      )
+    } else if (estado === 'confirmed') {
+      transformedData = transformedData.filter((persona: any) => 
+        persona.puesto_votacion && persona.mesa_votacion && 
         persona.confirmacion && !persona.confirmacion.reversado
       )
     } else if (estado === 'pending') {
       transformedData = transformedData.filter((persona: any) => 
-        !persona.confirmacion || persona.confirmacion.reversado
+        persona.puesto_votacion && persona.mesa_votacion &&
+        (!persona.confirmacion || persona.confirmacion.reversado)
       )
     }
 
@@ -144,6 +145,10 @@ export async function POST(request: NextRequest) {
         numero_celular: validatedData.numero_celular || null,
         direccion: validatedData.direccion || null,
         barrio: validatedData.barrio || null,
+        departamento: validatedData.departamento || null,
+        municipio: validatedData.municipio || null,
+        puesto_votacion: validatedData.puesto_votacion || null,
+        mesa_votacion: validatedData.mesa_votacion || null,
         registrado_por: profile.id,
         es_importado: false,
       })

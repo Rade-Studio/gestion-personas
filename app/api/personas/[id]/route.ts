@@ -115,6 +115,10 @@ export async function PUT(
         numero_celular: validatedData.numero_celular || null,
         direccion: validatedData.direccion || null,
         barrio: validatedData.barrio || null,
+        departamento: validatedData.departamento || null,
+        municipio: validatedData.municipio || null,
+        puesto_votacion: validatedData.puesto_votacion || null,
+        mesa_votacion: validatedData.mesa_votacion || null,
       })
       .eq('id', id)
       .select()
