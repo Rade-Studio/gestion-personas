@@ -18,7 +18,6 @@ import { Card, CardContent } from '@/components/ui/card'
 interface PersonasFiltersProps {
   onFilter: (filters: {
     puesto_votacion?: string
-    mesa_votacion?: string
     numero_documento?: string
     lider_id?: string
     estado?: string
@@ -37,13 +36,11 @@ export function PersonasFilters({
   const { isAdmin } = useAuth()
   const [filters, setFilters] = useState<{
     puesto_votacion: string | undefined
-    mesa_votacion: string | undefined
     numero_documento: string
     lider_id: string | undefined
     estado: string | undefined
   }>({
     puesto_votacion: undefined,
-    mesa_votacion: undefined,
     numero_documento: '',
     lider_id: undefined,
     estado: undefined,
@@ -54,9 +51,6 @@ export function PersonasFilters({
     const activeFilters: any = {}
     if (filters.puesto_votacion) {
       activeFilters.puesto_votacion = filters.puesto_votacion
-    }
-    if (filters.mesa_votacion) {
-      activeFilters.mesa_votacion = filters.mesa_votacion
     }
     if (filters.numero_documento.trim()) {
       activeFilters.numero_documento = filters.numero_documento.trim()
@@ -82,7 +76,7 @@ export function PersonasFilters({
   // Apply filters immediately when selects change
   useEffect(() => {
     applyFilters()
-  }, [filters.puesto_votacion, filters.mesa_votacion, filters.lider_id, filters.estado, applyFilters])
+  }, [filters.puesto_votacion, filters.lider_id, filters.estado, applyFilters])
 
   // Simple handler for filter changes
   const handleFilterChange = (key: string, value: string) => {
@@ -94,7 +88,6 @@ export function PersonasFilters({
   const handleClearFilters = () => {
     setFilters({
       puesto_votacion: undefined,
-      mesa_votacion: undefined,
       numero_documento: '',
       lider_id: undefined,
       estado: undefined,
@@ -104,7 +97,6 @@ export function PersonasFilters({
 
   const hasActiveFilters = 
     filters.puesto_votacion || 
-    filters.mesa_votacion || 
     filters.numero_documento.trim() || 
     filters.lider_id ||
     filters.estado
@@ -129,7 +121,7 @@ export function PersonasFilters({
             </Button>
           )}
         </div>
-        <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${isAdmin && lideres ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}>
+        <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${isAdmin && lideres ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
           <div className="space-y-2">
             <Label className="text-sm font-medium">Puesto de Votación</Label>
             <Select
@@ -141,29 +133,9 @@ export function PersonasFilters({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos los puestos</SelectItem>
-                {puestosVotacion.map((puesto) => (
+                {puestosVotacion.filter(p => p).map((puesto) => (
                   <SelectItem key={puesto} value={puesto}>
                     {puesto}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">Mesa de Votación</Label>
-            <Select
-              value={filters.mesa_votacion ? filters.mesa_votacion : 'all'}
-              onValueChange={(value) => handleFilterChange('mesa_votacion', value)}
-            >
-              <SelectTrigger className="h-10">
-                <SelectValue placeholder="Todas las mesas" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas las mesas</SelectItem>
-                {mesasVotacion.map((mesa) => (
-                  <SelectItem key={mesa} value={mesa}>
-                    {mesa}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -194,8 +166,9 @@ export function PersonasFilters({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos los estados</SelectItem>
-                <SelectItem value="confirmed">Confirmados</SelectItem>
+                <SelectItem value="missing_data">Datos Faltantes</SelectItem>
                 <SelectItem value="pending">Pendientes</SelectItem>
+                <SelectItem value="confirmed">Confirmados</SelectItem>
               </SelectContent>
             </Select>
           </div>
