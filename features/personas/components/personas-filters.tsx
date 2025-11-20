@@ -47,6 +47,8 @@ export function PersonasFilters({
   })
   const [liderSearch, setLiderSearch] = useState('')
   const [liderSelectOpen, setLiderSelectOpen] = useState(false)
+  const [puestoSearch, setPuestoSearch] = useState('')
+  const [puestoSelectOpen, setPuestoSelectOpen] = useState(false)
 
   // Apply filters function
   const applyFilters = useCallback(() => {
@@ -105,8 +107,8 @@ export function PersonasFilters({
 
   return (
     <Card>
-      <CardContent className="pt-6">
-        <div className="flex items-center justify-between mb-6">
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <Filter className="h-4 w-4 text-muted-foreground" />
             <h3 className="text-sm font-semibold">Filtros</h3>
@@ -116,54 +118,89 @@ export function PersonasFilters({
               variant="ghost"
               size="sm"
               onClick={handleClearFilters}
-              className="h-8 text-xs"
+              className="h-7 text-xs"
             >
               <X className="h-3 w-3 mr-1.5" />
               Limpiar
             </Button>
           )}
         </div>
-        <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${isAdmin && lideres ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">Puesto de Votación</Label>
+        <div className={`grid grid-cols-1 md:grid-cols-2 gap-x-2 gap-y-3 ${isAdmin && lideres ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium text-muted-foreground">Puesto de Votación</Label>
             <Select
               value={filters.puesto_votacion ? filters.puesto_votacion : 'all'}
-              onValueChange={(value) => handleFilterChange('puesto_votacion', value)}
+              onValueChange={(value) => {
+                handleFilterChange('puesto_votacion', value)
+                setPuestoSearch('')
+              }}
+              open={puestoSelectOpen}
+              onOpenChange={setPuestoSelectOpen}
             >
-              <SelectTrigger className="h-10">
+              <SelectTrigger className="h-9 text-sm w-full">
                 <SelectValue placeholder="Todos los puestos" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-h-[300px]">
+                <div className="sticky top-0 z-10 bg-background p-2 border-b">
+                  <div className="relative">
+                    <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Buscar puesto..."
+                      value={puestoSearch}
+                      onChange={(e) => setPuestoSearch(e.target.value)}
+                      className="pl-8 h-8 text-sm"
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    />
+                  </div>
+                </div>
                 <SelectItem value="all">Todos los puestos</SelectItem>
-                {puestosVotacion.filter(p => p).map((puesto) => (
-                  <SelectItem key={puesto} value={puesto}>
-                    {puesto}
-                  </SelectItem>
-                ))}
+                {puestosVotacion
+                  .filter((p) => {
+                    if (!p) return false
+                    if (!puestoSearch.trim()) return true
+                    const searchLower = puestoSearch.toLowerCase()
+                    return p.toLowerCase().includes(searchLower)
+                  })
+                  .map((puesto) => (
+                    <SelectItem key={puesto} value={puesto}>
+                      {puesto}
+                    </SelectItem>
+                  ))}
+                {puestosVotacion.filter((p) => {
+                  if (!p) return false
+                  if (!puestoSearch.trim()) return false
+                  const searchLower = puestoSearch.toLowerCase()
+                  return p.toLowerCase().includes(searchLower)
+                }).length === 0 && puestoSearch.trim() && (
+                  <div className="px-2 py-1.5 text-sm text-muted-foreground text-center">
+                    No se encontraron puestos
+                  </div>
+                )}
               </SelectContent>
             </Select>
           </div>
 
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">Número de Documento</Label>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium text-muted-foreground">Número de Documento</Label>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Buscar por documento..."
                 value={filters.numero_documento}
                 onChange={(e) => handleFilterChange('numero_documento', e.target.value)}
-                className="pl-9 h-10"
+                className="pl-9 h-9 text-sm"
               />
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">Estado</Label>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium text-muted-foreground">Estado</Label>
             <Select
               value={filters.estado ? filters.estado : 'all'}
               onValueChange={(value) => handleFilterChange('estado', value)}
             >
-              <SelectTrigger className="h-10">
+              <SelectTrigger className="h-9 text-sm">
                 <SelectValue placeholder="Todos los estados" />
               </SelectTrigger>
               <SelectContent>
@@ -176,8 +213,8 @@ export function PersonasFilters({
           </div>
 
           {isAdmin && lideres && (
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Líder</Label>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-muted-foreground">Líder</Label>
               <Select
                 value={filters.lider_id ? filters.lider_id : 'all'}
                 onValueChange={(value) => {
@@ -187,7 +224,7 @@ export function PersonasFilters({
                 open={liderSelectOpen}
                 onOpenChange={setLiderSelectOpen}
               >
-                <SelectTrigger className="h-10">
+                <SelectTrigger className="h-9 text-sm">
                   <SelectValue placeholder="Todos los líderes" />
                 </SelectTrigger>
                 <SelectContent className="max-h-[300px]">
