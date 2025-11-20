@@ -23,6 +23,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
+import { Loader2 } from 'lucide-react'
 import type { Persona } from '@/lib/types'
 
 interface PersonaFormProps {
@@ -331,7 +332,14 @@ export function PersonaForm({
                 Cancelar
               </Button>
               <Button type="submit" disabled={loading}>
-                {loading ? 'Guardando...' : initialData ? 'Actualizar' : 'Crear'}
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {initialData ? 'Actualizando...' : 'Creando...'}
+                  </>
+                ) : (
+                  initialData ? 'Actualizar' : 'Crear'
+                )}
               </Button>
             </DialogFooter>
           </form>

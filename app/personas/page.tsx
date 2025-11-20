@@ -43,6 +43,7 @@ export default function PersonasPage() {
   const [loading, setLoading] = useState(true)
   const [formOpen, setFormOpen] = useState(false)
   const [editingPersona, setEditingPersona] = useState<PersonaWithConfirmacion | null>(null)
+  const [saving, setSaving] = useState(false)
   const [confirmVotoOpen, setConfirmVotoOpen] = useState(false)
   const [confirmingPersona, setConfirmingPersona] = useState<PersonaWithConfirmacion | null>(null)
   const [importOpen, setImportOpen] = useState(false)
@@ -254,6 +255,7 @@ export default function PersonasPage() {
   }
 
   const handleSubmit = async (data: PersonaFormData) => {
+    setSaving(true)
     try {
       const url = editingPersona
         ? `/api/personas/${editingPersona.id}`
@@ -272,7 +274,12 @@ export default function PersonasPage() {
         throw new Error(result.error || 'Error al guardar persona')
       }
 
-      toast.success(editingPersona ? 'Persona actualizada' : 'Persona creada')
+      toast.success(
+        editingPersona 
+          ? 'Persona actualizada exitosamente' 
+          : 'Persona creada exitosamente',
+        { duration: 3000 }
+      )
       setFormOpen(false)
       setEditingPersona(null)
       fetchPersonas()
@@ -280,6 +287,8 @@ export default function PersonasPage() {
       toast.error(error.message, { duration: 8000 })
       // No cerrar el formulario ni resetear - mantener los datos para corrección
       throw error // Re-lanzar el error para que el formulario no se resetee
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -702,9 +711,17 @@ export default function PersonasPage() {
 
       <PersonaForm
         open={formOpen}
-        onOpenChange={setFormOpen}
+        onOpenChange={(open) => {
+          if (!saving) {
+            setFormOpen(open)
+            if (!open) {
+              setEditingPersona(null)
+            }
+          }
+        }}
         onSubmit={handleSubmit}
         initialData={editingPersona || undefined}
+        loading={saving}
       />
 
       <ConfirmarVotoDialog
