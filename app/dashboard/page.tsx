@@ -6,6 +6,10 @@ import { ProfileSetup } from '@/features/auth/components/profile-setup'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Users, CheckCircle2, XCircle, TrendingUp, ArrowUpRight, ArrowDownRight } from 'lucide-react'
+import { useAuth } from '@/features/auth/hooks/use-auth'
+import { ChartLideres } from '@/features/dashboard/components/chart-lideres'
+import { ChartDepartamentos } from '@/features/dashboard/components/chart-departamentos'
+import { ChartVotosDepartamentos } from '@/features/dashboard/components/chart-votos-departamentos'
 
 interface DashboardStats {
   total_registradas: number
@@ -16,6 +20,8 @@ interface DashboardStats {
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(true)
+  const { isAdmin } = useAuth()
+  const enableAdminCharts = process.env.NEXT_PUBLIC_ENABLE_ADMIN_CHARTS === 'true'
 
   const fetchStats = async () => {
     setLoading(true)
@@ -214,6 +220,23 @@ export default function DashboardPage() {
                 </div>
               </CardContent>
             </Card>
+          </div>
+        )}
+
+        {isAdmin && enableAdminCharts && (
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-2xl font-bold tracking-tight">Estadísticas Avanzadas</h2>
+              <p className="text-muted-foreground mt-1.5">
+                Gráficos detallados para administradores
+              </p>
+            </div>
+
+            <ChartLideres />
+
+            <ChartDepartamentos />
+
+            <ChartVotosDepartamentos />
           </div>
         )}
       </div>

@@ -56,6 +56,13 @@
   --sidebar-accent-foreground: hsl(240 5.9% 10%);
   --sidebar-border: hsl(220 13% 91%);
   --sidebar-ring: hsl(217.2 91.2% 59.8%);
+
+  /* Chart colors - usando paleta del aplicativo */
+  --chart-1: 221 83% 53%; /* Primary - Azul */
+  --chart-2: 142 76% 36%; /* Success - Verde */
+  --chart-3: 38 92% 50%; /* Warning - Naranja */
+  --chart-4: 0 84% 60%; /* Destructive - Rojo */
+  --chart-5: 214 32% 91%; /* Muted - Gris */
 }
 
 @theme inline {
