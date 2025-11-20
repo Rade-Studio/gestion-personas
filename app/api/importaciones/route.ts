@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const rows: any[] = []
+    let rows: any[] = []
     const errors: Array<{ row: number; error: string }> = []
 
     // Helper function to format date from Excel
@@ -84,6 +84,34 @@ export async function POST(request: NextRequest) {
       return ''
     }
 
+    // Helper function to normalize tipo_documento
+    const normalizeTipoDocumento = (value: string): string => {
+      if (!value) return 'CC'
+      const normalized = value.trim()
+      // Normalizar variaciones comunes
+      const tipoMap: Record<string, string> = {
+        'CC': 'CC',
+        'C.C': 'CC',
+        'C.C.': 'CC',
+        'Cedula': 'CC',
+        'Cédula': 'CC',
+        'Cedula de Ciudadania': 'CC',
+        'Cédula de Ciudadanía': 'CC',
+        'CE': 'CE',
+        'C.E': 'CE',
+        'C.E.': 'CE',
+        'Cedula de Extranjeria': 'CE',
+        'Cédula de Extranjería': 'CE',
+        'Pasaporte': 'Pasaporte',
+        'TI': 'TI',
+        'T.I': 'TI',
+        'T.I.': 'TI',
+        'Tarjeta de Identidad': 'TI',
+        'Otro': 'Otro',
+      }
+      return tipoMap[normalized] || normalized
+    }
+
     // Skip header row (row 1) and process data
     worksheet.eachRow((row, rowNumber) => {
       if (rowNumber === 1) return // Skip header
@@ -101,7 +129,8 @@ export async function POST(request: NextRequest) {
           rowData.apellidos = cellValue?.toString() || ''
         }
         if (header.includes('Tipo de Documento')) {
-          rowData.tipo_documento = cellValue?.toString() || 'CC'
+          const tipoDoc = cellValue?.toString() || 'CC'
+          rowData.tipo_documento = normalizeTipoDocumento(tipoDoc)
         }
         if (header.includes('Número de Documento')) {
           rowData.numero_documento = cellValue?.toString() || ''
@@ -137,49 +166,173 @@ export async function POST(request: NextRequest) {
         personaSchema.parse(rowData)
         rows.push(rowData)
       } catch (error: any) {
+        // Mejorar mensajes de error de validación
+        let errorMessage = 'Datos inválidos'
+        if (error.errors && Array.isArray(error.errors)) {
+          const errorMessages = error.errors.map((e: any) => {
+            // Mensajes más descriptivos
+            if (e.path && e.path.includes('tipo_documento')) {
+              return `Tipo de documento inválido: "${rowData.tipo_documento || 'vacío'}". Debe ser: CC, CE, Pasaporte, TI u Otro`
+            }
+            if (e.path && e.path.includes('fecha_nacimiento')) {
+              return `Fecha de nacimiento inválida: "${rowData.fecha_nacimiento || 'vacío'}". Debe estar en formato YYYY-MM-DD y ser una fecha válida no futura`
+            }
+            if (e.path && e.path.includes('nombres')) {
+              return 'Los nombres son obligatorios'
+            }
+            if (e.path && e.path.includes('apellidos')) {
+              return 'Los apellidos son obligatorios'
+            }
+            if (e.path && e.path.includes('numero_documento')) {
+              return 'El número de documento es obligatorio'
+            }
+            return e.message || 'Campo inválido'
+          })
+          errorMessage = errorMessages.join('. ')
+        }
         errors.push({
           row: rowNumber,
-          error: error.errors?.map((e: any) => e.message).join(', ') || 'Datos inválidos',
+          error: errorMessage,
         })
       }
     })
 
-    // Check for duplicate documentos in file
+    // Check for duplicate documentos in file (solo numero_documento porque la BD tiene restricción única en ese campo)
     const documentosInFile = rows.map((r) => r.numero_documento)
-    const duplicatesInFile = documentosInFile.filter(
-      (doc, index) => documentosInFile.indexOf(doc) !== index
-    )
-    if (duplicatesInFile.length > 0) {
+    const duplicatesInFile = new Set<string>()
+    const seenInFile = new Map<string, number>() // numero_documento -> primera fila donde aparece
+    
+    rows.forEach((r, index) => {
+      const rowNumber = index + 2 // +2 porque index es 0-based y rowNumber es 1-based + header
+      if (seenInFile.has(r.numero_documento)) {
+        duplicatesInFile.add(r.numero_documento)
+      } else {
+        seenInFile.set(r.numero_documento, rowNumber)
+      }
+    })
+    
+    if (duplicatesInFile.size > 0) {
+      const duplicateRows: Array<{ row: number; numero_documento: string; primeraAparicion: number }> = []
+      rows.forEach((r, index) => {
+        const rowNumber = index + 2
+        if (duplicatesInFile.has(r.numero_documento)) {
+          const primeraAparicion = seenInFile.get(r.numero_documento)!
+          duplicateRows.push({
+            row: rowNumber,
+            numero_documento: r.numero_documento,
+            primeraAparicion: primeraAparicion
+          })
+        }
+      })
+      
+      // Agregar estos errores a la lista de errores en lugar de retornar inmediatamente
+      duplicateRows.forEach((dup) => {
+        errors.push({
+          row: dup.row,
+          error: `Número de documento "${dup.numero_documento}" duplicado en el archivo (primera aparición en fila ${dup.primeraAparicion})`,
+        })
+      })
+      
+      // Remover las filas duplicadas (mantener solo la primera aparición)
+      const duplicateRowsSet = new Set(duplicateRows.map(d => d.row))
+      rows = rows.filter((_, index) => {
+        const rowNumber = index + 2
+        return !duplicateRowsSet.has(rowNumber) || seenInFile.get(rows[index].numero_documento) === rowNumber
+      })
+    }
+
+    // Check for duplicates in database
+    // Validar considerando tipo_documento + numero_documento + registrado_por
+    // Si es del mismo líder → actualizar, si es de otro líder → error
+    const numerosDocumento = [...new Set(rows.map((r) => r.numero_documento))]
+    
+    // Obtener todas las personas que coinciden con alguno de los números de documento a importar
+    const { data: existingPersonas, error: existingError } = await supabase
+      .from('personas')
+      .select('id, tipo_documento, numero_documento, registrado_por')
+      .in('numero_documento', numerosDocumento)
+    
+    if (existingError) {
       return NextResponse.json(
-        {
-          error: 'El archivo contiene números de documento duplicados',
-          duplicates: duplicatesInFile,
-        },
-        { status: 400 }
+        { error: 'Error al verificar duplicados en la base de datos' },
+        { status: 500 }
       )
     }
 
-    // Check for duplicates in database and get their IDs
-    const documentos = rows.map((r) => r.numero_documento)
-    const { data: existingPersonas } = await supabase
-      .from('personas')
-      .select('id, numero_documento')
-      .in('numero_documento', documentos)
-
+    // Verificar duplicados considerando tipo_documento + numero_documento + registrado_por
+    // Los admins pueden actualizar cualquier persona, los líderes solo las suyas
+    const duplicateErrors: Array<{ row: number; error: string }> = []
+    const currentLiderId = profile.id
+    const isAdmin = profile.role === 'admin'
+    
+    rows.forEach((row, index) => {
+      const rowNumber = index + 2 // +2 porque index es 0-based y rowNumber es 1-based + header
+      // Buscar si existe una persona con el mismo tipo_documento + numero_documento
+      const existingPersona = existingPersonas?.find(
+        (p) => p.tipo_documento === row.tipo_documento &&
+               p.numero_documento === row.numero_documento
+      )
+      
+      if (existingPersona) {
+        // Si es admin, puede actualizar cualquier persona (no hay error)
+        // Si es líder y la persona es de otro líder → error
+        if (!isAdmin && existingPersona.registrado_por !== currentLiderId) {
+          duplicateErrors.push({
+            row: rowNumber,
+            error: `Ya existe una persona con tipo de documento "${row.tipo_documento}" y número "${row.numero_documento}" registrada por otro líder`,
+          })
+        }
+        // Si existe y es del mismo líder o es admin → se actualizará más adelante (no hacer nada aquí)
+      }
+    })
+    
+    // Si hay errores de duplicados, agregarlos a la lista de errores
+    if (duplicateErrors.length > 0) {
+      errors.push(...duplicateErrors)
+      // Remover las filas con errores de duplicados de la lista de filas válidas
+      const duplicateRowsSet = new Set(duplicateErrors.map(e => e.row))
+      rows = rows.filter((_, index) => !duplicateRowsSet.has(index + 2))
+    }
+    
+    // Crear un mapa usando tipo_documento + numero_documento como clave
     const existingDocumentosMap = new Map(
-      existingPersonas?.map((p) => [p.numero_documento, p.id]) || []
+      existingPersonas?.map((p) => [`${p.tipo_documento}-${p.numero_documento}`, { id: p.id, registrado_por: p.registrado_por, tipo_documento: p.tipo_documento, numero_documento: p.numero_documento }]) || []
     )
 
     // Separate rows into new and existing
-    const newRows = rows.filter((r) => !existingDocumentosMap.has(r.numero_documento))
-    const existingRows = rows.filter((r) => existingDocumentosMap.has(r.numero_documento))
+    // Nueva: no existe en la BD
+    // Existente: existe con el mismo tipo_documento + numero_documento
+    //   - Si es admin: puede actualizar cualquier persona existente
+    //   - Si es líder: solo puede actualizar las que registró él mismo
+    const newRows = rows.filter((r) => {
+      const key = `${r.tipo_documento}-${r.numero_documento}`
+      const existing = existingDocumentosMap.get(key)
+      // Es nueva si no existe
+      return !existing
+    })
+    
+    const existingRows = rows.filter((r) => {
+      const key = `${r.tipo_documento}-${r.numero_documento}`
+      const existing = existingDocumentosMap.get(key)
+      // Existe si está en el mapa
+      // Si es admin, puede actualizar cualquier persona existente
+      // Si es líder, solo puede actualizar las que registró él mismo
+      return existing && (isAdmin || existing.registrado_por === currentLiderId)
+    })
 
     // Check which existing personas have confirmations
-    const existingPersonaIds = Array.from(existingDocumentosMap.values())
+    const existingPersonaIds = existingRows
+      .map((r) => {
+        const key = `${r.tipo_documento}-${r.numero_documento}`
+        const existing = existingDocumentosMap.get(key)
+        return existing?.id
+      })
+      .filter((id): id is string => id !== undefined)
+    
     const { data: confirmaciones } = await supabase
       .from('voto_confirmaciones')
       .select('persona_id')
-      .in('persona_id', existingPersonaIds)
+      .in('persona_id', existingPersonaIds.length > 0 ? existingPersonaIds : [''])
       .eq('reversado', false)
 
     const personasConConfirmacion = new Set(
@@ -188,27 +341,23 @@ export async function POST(request: NextRequest) {
 
     // Filter existing rows: only update those without confirmation
     const rowsToUpdate = existingRows.filter((r) => {
-      const personaId = existingDocumentosMap.get(r.numero_documento)
+      const key = `${r.tipo_documento}-${r.numero_documento}`
+      const existing = existingDocumentosMap.get(key)
+      const personaId = existing?.id
       return personaId && !personasConConfirmacion.has(personaId)
     })
 
     const rowsToSkip = existingRows.filter((r) => {
-      const personaId = existingDocumentosMap.get(r.numero_documento)
+      const key = `${r.tipo_documento}-${r.numero_documento}`
+      const existing = existingDocumentosMap.get(key)
+      const personaId = existing?.id
       return personaId && personasConConfirmacion.has(personaId)
     })
 
-    if (newRows.length === 0 && rowsToUpdate.length === 0) {
-      return NextResponse.json(
-        {
-          error: 'Todas las personas ya existen en la base de datos. Las que tienen confirmación no se actualizarán.',
-          registros_exitosos: 0,
-          registros_fallidos: rows.length,
-          registros_omitidos: rowsToSkip.length,
-          errores: errors,
-        },
-        { status: 400 }
-      )
-    }
+    // NO retornar error aquí - permitir que el proceso continúe normalmente
+    // Si hay filas existentes del mismo líder sin confirmación, estarán en rowsToUpdate y se actualizarán
+    // Si todas tienen confirmación, estarán en rowsToSkip y se mostrará en el resultado final
+    // El proceso continuará normalmente y retornará el resultado apropiado al final
 
     // Create importacion record
     const { data: importacion, error: importacionError } = await supabase
@@ -275,21 +424,69 @@ export async function POST(request: NextRequest) {
         }
       })
 
-      const { error: insertError } = await supabase
-        .from('personas')
-        .insert(personasToInsert)
+      // Insertar en lotes para mejor manejo de errores
+      const batchSize = 100
+      for (let i = 0; i < personasToInsert.length; i += batchSize) {
+        const batch = personasToInsert.slice(i, i + batchSize)
+        const { error: insertError, data: insertedData } = await supabase
+          .from('personas')
+          .insert(batch)
+          .select('id, numero_documento, tipo_documento')
 
-      if (insertError) {
-        insertErrors.push({ error: insertError.message })
-      } else {
-        insertCount = newRows.length
+        if (insertError) {
+          // Si hay error de clave duplicada, intentar insertar uno por uno para identificar el problema exacto
+          if (insertError.code === '23505' || insertError.message.includes('duplicate key') || insertError.message.includes('unique constraint')) {
+            // Error de clave única violada - insertar uno por uno para identificar exactamente qué fila causa el problema
+            for (let batchIndex = 0; batchIndex < batch.length; batchIndex++) {
+              const persona = batch[batchIndex]
+              const originalRowIndex = i + batchIndex
+              const originalRow = newRows[originalRowIndex]
+              
+              // Intentar insertar individualmente para identificar el problema exacto
+              const { error: singleError } = await supabase
+                .from('personas')
+                .insert([persona])
+              
+              if (singleError) {
+                let errorMessage = `Ya existe una persona con número de documento "${persona.numero_documento}" en la base de datos`
+                if (singleError.message && !singleError.message.includes('duplicate') && !singleError.message.includes('unique')) {
+                  errorMessage = `Error al insertar: ${singleError.message}`
+                }
+                insertErrors.push({
+                  row: originalRowIndex + 2, // +2 para compensar header y 0-based index
+                  numero_documento: originalRow?.numero_documento || persona.numero_documento,
+                  error: errorMessage,
+                })
+              } else {
+                insertCount++
+              }
+            }
+          } else {
+            // Otro tipo de error - agregar error para todo el lote
+            batch.forEach((persona, batchIndex) => {
+              const originalRowIndex = i + batchIndex
+              const originalRow = newRows[originalRowIndex]
+              if (originalRow) {
+                insertErrors.push({
+                  row: originalRowIndex + 2,
+                  numero_documento: originalRow.numero_documento,
+                  error: `Error al insertar: ${insertError.message || 'Error desconocido'}`,
+                })
+              }
+            })
+          }
+        } else {
+          insertCount += batch.length
+        }
       }
     }
 
     // Update existing personas (puesto_votacion, mesa_votacion, departamento, municipio, and only if no confirmation)
     if (rowsToUpdate.length > 0) {
       for (const row of rowsToUpdate) {
-        const personaId = existingDocumentosMap.get(row.numero_documento)
+        const key = `${row.tipo_documento}-${row.numero_documento}`
+        const existing = existingDocumentosMap.get(key)
+        const personaId = existing?.id
         if (!personaId) continue
 
         const { error: updateError } = await supabase
@@ -303,9 +500,25 @@ export async function POST(request: NextRequest) {
           .eq('id', personaId)
 
         if (updateError) {
+          let errorMessage = updateError.message
+          if (updateError.code === '23505' || updateError.message.includes('duplicate key') || updateError.message.includes('unique constraint')) {
+            errorMessage = `Ya existe una persona con número de documento "${row.numero_documento}" en la base de datos`
+          } else if (updateError.message) {
+            errorMessage = `Error al actualizar: ${updateError.message}`
+          } else {
+            errorMessage = 'Error desconocido al actualizar'
+          }
+          
+          // Encontrar el número de fila original buscando en todas las filas procesadas
+          const originalRowIndex = rows.findIndex((r) => 
+            r.tipo_documento === row.tipo_documento && 
+            r.numero_documento === row.numero_documento
+          )
+          
           updateErrors.push({
+            row: originalRowIndex >= 0 ? originalRowIndex + 2 : 'N/A',
             numero_documento: row.numero_documento,
-            error: updateError.message,
+            error: errorMessage,
           })
         } else {
           updateCount++
@@ -328,11 +541,21 @@ export async function POST(request: NextRequest) {
       })
       .eq('id', importacion.id)
 
-    // Prepare detailed error information
+    // Prepare detailed error information con mejor formato
     const erroresDetallados = [
-      ...errors,
-      ...insertErrors.map((e: any) => ({ ...e, tipo: 'inserción' })),
-      ...updateErrors.map((e: any) => ({ ...e, tipo: 'actualización' })),
+      ...errors.map((e) => ({ ...e, tipo: 'validación' })),
+      ...insertErrors.map((e: any) => ({
+        row: e.row || 'N/A',
+        numero_documento: e.numero_documento || 'N/A',
+        error: e.error || 'Error desconocido',
+        tipo: 'inserción',
+      })),
+      ...updateErrors.map((e: any) => ({
+        row: e.row || 'N/A',
+        numero_documento: e.numero_documento || 'N/A',
+        error: e.error || 'Error desconocido',
+        tipo: 'actualización',
+      })),
     ]
 
     // Get documentos of skipped rows

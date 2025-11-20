@@ -2,14 +2,45 @@ import { z } from 'zod'
 
 export const documentoTipos = ['CC', 'CE', 'Pasaporte', 'TI', 'Otro'] as const
 
+// Función para validar fecha de nacimiento
+const validateFechaNacimiento = (value: string | undefined): boolean => {
+  if (!value || value.trim() === '') return true // Opcional
+  
+  // Validar formato YYYY-MM-DD
+  const dateRegex = /^\d{4}-\d{2}-\d{2}$/
+  if (!dateRegex.test(value)) return false
+  
+  // Validar que sea una fecha válida
+  const date = new Date(value)
+  if (isNaN(date.getTime())) return false
+  
+  // Validar que no sea una fecha futura
+  if (date > new Date()) return false
+  
+  // Validar que no sea muy antigua (más de 150 años)
+  const minDate = new Date()
+  minDate.setFullYear(minDate.getFullYear() - 150)
+  if (date < minDate) return false
+  
+  return true
+}
+
 export const personaSchema = z.object({
   nombres: z.string().min(1, 'Los nombres son obligatorios'),
   apellidos: z.string().min(1, 'Los apellidos son obligatorios'),
   tipo_documento: z.enum(documentoTipos, {
-    errorMap: () => ({ message: 'Tipo de documento inválido' }),
+    message: 'Tipo de documento inválido. Debe ser: CC, CE, Pasaporte, TI u Otro',
   }),
   numero_documento: z.string().min(1, 'El número de documento es obligatorio'),
-  fecha_nacimiento: z.string().optional().or(z.literal('')),
+  fecha_nacimiento: z.string()
+    .optional()
+    .or(z.literal(''))
+    .refine(
+      (val) => !val || validateFechaNacimiento(val),
+      {
+        message: 'Fecha de nacimiento inválida. Debe estar en formato YYYY-MM-DD y ser una fecha válida no futura',
+      }
+    ),
   numero_celular: z.string().optional().or(z.literal('')),
   direccion: z.string().optional().or(z.literal('')),
   barrio: z.string().optional().or(z.literal('')),
