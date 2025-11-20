@@ -27,7 +27,7 @@ import {
 import { documentoTipos } from '@/features/personas/validations/persona'
 
 export function ProfileSetup() {
-  const { user, profile, loading } = useAuth()
+  const { user, profile, loading, refreshProfile } = useAuth()
   const [showDialog, setShowDialog] = useState(false)
   const [saving, setSaving] = useState(false)
   const [formData, setFormData] = useState({
@@ -198,7 +198,7 @@ export function ProfileSetup() {
 
                     toast.success('Perfil creado exitosamente')
                     setShowDialog(false)
-                    window.location.reload()
+                    await refreshProfile()
                   } catch (error: any) {
                     toast.error(error.message)
                   } finally {
