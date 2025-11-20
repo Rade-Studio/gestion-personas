@@ -1,9 +1,24 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useMemo } from 'react'
+import { useRouter, usePathname } from 'next/navigation'
 import { useAuth } from '@/features/auth/hooks/use-auth'
-import { Button } from '@/components/ui/button'
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarRail,
+  SidebarTrigger,
+} from '@/components/ui/sidebar'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,16 +27,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from '@/components/ui/sheet'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Separator } from '@/components/ui/separator'
 import Link from 'next/link'
-import { LogOut, User, LayoutDashboard, Users, UserCog, Menu, Award } from 'lucide-react'
+import { LogOut, User, LayoutDashboard, Users, UserCog, Award, Building2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface MainLayoutProps {
@@ -30,121 +39,130 @@ interface MainLayoutProps {
 
 export function MainLayout({ children }: MainLayoutProps) {
   const router = useRouter()
+  const pathname = usePathname()
   const { profile, signOut, isAdmin } = useAuth()
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   const handleSignOut = async () => {
-    await signOut()
-    toast.success('Sesión cerrada')
-    router.push('/login')
+    try {
+      // Primero llamamos al endpoint del servidor para limpiar cookies
+      try {
+        const response = await fetch('/api/auth/logout', {
+          method: 'POST',
+        })
+        if (!response.ok) {
+          console.error('Error al cerrar sesión en servidor')
+        }
+      } catch (serverError) {
+        console.error('Error al cerrar sesión en servidor:', serverError)
+      }
+      
+      // Luego cerramos sesión en el cliente
+      await signOut()
+      
+      toast.success('Sesión cerrada')
+      
+      // Redirigir inmediatamente
+      window.location.href = '/auth/login'
+    } catch (error: any) {
+      console.error('Error al cerrar sesión:', error)
+      toast.error('Error al cerrar sesión. Por favor, intenta nuevamente.')
+      // Aún así intentamos redirigir
+      window.location.href = '/auth/login'
+    }
   }
 
-  const initials = profile
-    ? `${profile.nombres[0]}${profile.apellidos[0]}`.toUpperCase()
-    : 'U'
+  const initials = useMemo(
+    () => (profile ? `${profile.nombres[0]}${profile.apellidos[0]}`.toUpperCase() : 'U'),
+    [profile]
+  )
 
-  const navItems = [
-    { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { href: '/personas', label: 'Personas', icon: Users },
-    ...(isAdmin ? [
-      { href: '/lideres', label: 'Líderes', icon: UserCog },
-      { href: '/candidatos', label: 'Candidatos', icon: Award },
-    ] : []),
-  ]
+  const navItems = useMemo(
+    () => [
+      { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+      { href: '/personas', label: 'Personas', icon: Users },
+      ...(isAdmin
+        ? [
+            { href: '/lideres', label: 'Líderes', icon: UserCog },
+            { href: '/candidatos', label: 'Candidatos', icon: Award },
+          ]
+        : []),
+    ],
+    [isAdmin]
+  )
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-50 w-full border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/60">
-        <div className="container mx-auto px-4 sm:px-6">
-          <div className="flex h-16 items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Link href="/dashboard" className="text-lg font-semibold tracking-tight">
-                Gestión de Votantes
-              </Link>
-              {/* Desktop Navigation */}
-              <nav className="hidden md:flex items-center gap-1">
+    <SidebarProvider>
+      <Sidebar variant="inset" collapsible="icon">
+        <SidebarHeader className="border-b">
+          <div className="flex items-center gap-2 px-2 py-4">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shrink-0">
+              <Building2 className="h-5 w-5" />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-sm font-semibold">Gestión</span>
+              <span className="text-xs text-muted-foreground">Votantes</span>
+            </div>
+          </div>
+        </SidebarHeader>
+        <SidebarContent>
+          <SidebarGroup>
+            <SidebarGroupLabel>Navegación</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
                 {navItems.map((item) => {
                   const Icon = item.icon
+                  const isActive = pathname === item.href
                   return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      className="px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground rounded-md hover:bg-accent"
-                    >
-                      {item.label}
-                    </Link>
+                    <SidebarMenuItem key={item.href}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={isActive}
+                        tooltip={item.label}
+                      >
+                        <Link href={item.href}>
+                          <Icon />
+                          <span>{item.label}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
                   )
                 })}
-              </nav>
-            </div>
-            <div className="flex items-center gap-2 sm:gap-3">
-              {/* Mobile Menu */}
-              <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-                <SheetTrigger asChild>
-                  <Button variant="ghost" size="icon" className="md:hidden">
-                    <Menu className="h-5 w-5" />
-                    <span className="sr-only">Abrir menú</span>
-                  </Button>
-                </SheetTrigger>
-                <SheetContent side="left" className="w-64">
-                  <SheetHeader>
-                    <SheetTitle>Menú de Navegación</SheetTitle>
-                  </SheetHeader>
-                  <nav className="flex flex-col gap-2 mt-6">
-                    {navItems.map((item) => {
-                      const Icon = item.icon
-                      return (
-                        <Link
-                          key={item.href}
-                          href={item.href}
-                          onClick={() => setMobileMenuOpen(false)}
-                          className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground rounded-md hover:bg-accent"
-                        >
-                          <Icon className="h-4 w-4" />
-                          {item.label}
-                        </Link>
-                      )
-                    })}
-                    <div className="border-t my-2" />
-                    <Link
-                      href="/perfil"
-                      onClick={() => setMobileMenuOpen(false)}
-                      className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground rounded-md hover:bg-accent"
-                    >
-                      <User className="h-4 w-4" />
-                      Perfil
-                    </Link>
-                    <button
-                      onClick={() => {
-                        setMobileMenuOpen(false)
-                        handleSignOut()
-                      }}
-                      className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground rounded-md hover:bg-accent text-left"
-                    >
-                      <LogOut className="h-4 w-4" />
-                      Cerrar Sesión
-                    </button>
-                  </nav>
-                </SheetContent>
-              </Sheet>
-
-              {/* Desktop Profile Link */}
-              <Link
-                href="/perfil"
-                className="hidden md:flex px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground rounded-md hover:bg-accent"
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </SidebarContent>
+        <SidebarFooter className="border-t">
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                asChild
+                tooltip="Perfil"
               >
-                Perfil
-              </Link>
+                <Link href="/perfil">
+                  <User />
+                  <span>Perfil</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="relative h-9 w-9 rounded-full">
-                    <Avatar className="h-9 w-9">
-                      <AvatarFallback className="text-xs font-medium">{initials}</AvatarFallback>
+                  <SidebarMenuButton className="w-full">
+                    <Avatar className="h-6 w-6 shrink-0">
+                      <AvatarFallback className="text-xs">{initials}</AvatarFallback>
                     </Avatar>
-                  </Button>
+                    <div className="flex flex-col items-start">
+                      <span className="text-sm font-medium">
+                        {profile?.nombres} {profile?.apellidos}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {profile?.role === 'admin' ? 'Administrador' : 'Líder'}
+                      </span>
+                    </div>
+                  </SidebarMenuButton>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-56" align="end">
-                  <DropdownMenuLabel className="font-normal">
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel>
                     <div className="flex flex-col space-y-1">
                       <p className="text-sm font-medium leading-none">
                         {profile?.nombres} {profile?.apellidos}
@@ -161,12 +179,25 @@ export function MainLayout({ children }: MainLayoutProps) {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-            </div>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarFooter>
+        <SidebarRail />
+      </Sidebar>
+      <SidebarInset>
+        <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center gap-2 border-b bg-background px-4">
+          <SidebarTrigger className="-ml-1" />
+          <Separator orientation="vertical" className="mr-2 h-4" />
+          <div className="flex flex-1 items-center gap-2">
+            <h1 className="text-lg font-semibold">
+              {useMemo(() => navItems.find(item => item.href === pathname)?.label || 'Dashboard', [navItems, pathname])}
+            </h1>
           </div>
+        </header>
+        <div className="flex flex-1 flex-col gap-4 p-4 md:p-6">
+          {children}
         </div>
-      </header>
-      <main className="container mx-auto px-4 sm:px-6 py-8">{children}</main>
-    </div>
+      </SidebarInset>
+    </SidebarProvider>
   )
 }
-
