@@ -124,3 +124,33 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+@keyframes slide-in-from-top {
+  from {
+    transform: translate(-50%, -100vh) !important;
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, 0) !important;
+    opacity: 1;
+  }
+}
+
+@keyframes slide-out-to-top {
+  from {
+    transform: translate(-50%, 0) !important;
+    opacity: 1;
+  }
+  to {
+    transform: translate(-50%, -100vh) !important;
+    opacity: 0;
+  }
+}
+
+.animate-slide-in-from-top[data-state="open"] {
+  animation: slide-in-from-top 0.5s ease-out forwards !important;
+}
+
+.animate-slide-out-to-top[data-state="closed"] {
+  animation: slide-out-to-top 0.3s ease-out forwards !important;
+}

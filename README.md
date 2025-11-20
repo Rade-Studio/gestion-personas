@@ -29,18 +29,30 @@ NEXT_PUBLIC_SUPABASE_URL=tu_url_de_supabase
 NEXT_PUBLIC_SUPABASE_ANON_KEY=tu_clave_anonima_de_supabase
 SUPABASE_SERVICE_ROLE_KEY=tu_service_role_key_de_supabase
 NEXT_PUBLIC_ENABLE_ADMIN_CHARTS=true
+NEXT_PUBLIC_SHOW_CANDIDATOS_ADS=true
 ```
 
 **Importante**: La `SUPABASE_SERVICE_ROLE_KEY` es necesaria para crear usuarios (líderes) desde el panel de administración. Puedes encontrarla en tu dashboard de Supabase en **Settings > API > service_role key**. **Nunca expongas esta clave en el cliente**, solo úsala en el servidor.
 
 **Gráficos de Administrador**: La variable `NEXT_PUBLIC_ENABLE_ADMIN_CHARTS` controla la visualización de gráficos estadísticos avanzados en el dashboard. Solo son visibles para usuarios con rol de administrador. Establece en `true` para habilitar o `false` para deshabilitar.
 
+**Publicidad de Candidatos**: La variable `NEXT_PUBLIC_SHOW_CANDIDATOS_ADS` controla la visualización del modal de publicidad de candidatos en la página de login. Establece en `true` para habilitar o `false` para deshabilitar. Cuando está habilitado, el modal se muestra automáticamente al cargar la página de login con la información de los candidatos disponibles.
+
 ### 2. Base de Datos
 
 Ejecuta las migraciones SQL en tu proyecto de Supabase:
 
 1. Ve a SQL Editor en tu dashboard de Supabase
-2. Copia y ejecuta el contenido de `supabase/migrations/001_initial_schema.sql`
+2. Ejecuta las migraciones en orden cronológico desde la carpeta `supabase/migrations/`:
+   - `20251118151403_initial_db.sql`
+   - `20251118151634_initial_db_01.sql`
+   - `20251118160000_fix_profiles_rls_recursion.sql`
+   - `20251118170000_setup_storage_bucket.sql`
+   - `20251118180000_fix_voto_confirmaciones_admin_insert.sql`
+   - `20251118190000_add_departamento_municipio_personas.sql`
+   - `20251118200000_add_candidatos_and_lider_fields.sql`
+   - `20251118210000_setup_candidatos_storage_bucket.sql`
+   - `20251119000000_add_public_candidatos_policy.sql` (necesaria para la publicidad de candidatos)
 
 ### 3. Storage Bucket
 

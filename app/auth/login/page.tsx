@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -12,10 +12,21 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { toast } from 'sonner'
 import { Users, Shield, BarChart3 } from 'lucide-react'
+import { CandidatosAdModal } from '@/features/auth/components/candidatos-ad-modal'
+
+interface CandidatoPublic {
+  id: string
+  nombre_completo: string
+  numero_tarjeton: string
+  imagen_url?: string
+  partido_grupo?: string
+}
 
 export default function LoginPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [candidatos, setCandidatos] = useState<CandidatoPublic[]>([])
+  const [showAdModal, setShowAdModal] = useState(false)
   const supabase = createClient()
 
   const {
@@ -25,6 +36,28 @@ export default function LoginPage() {
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
   })
+
+  useEffect(() => {
+    const loadCandidatos = async () => {
+      const showAds = process.env.NEXT_PUBLIC_SHOW_CANDIDATOS_ADS === 'true'
+      
+      if (!showAds) return
+
+      try {
+        const response = await fetch('/api/candidatos/public')
+        const result = await response.json()
+
+        if (response.ok && result.data && result.data.length > 0) {
+          setCandidatos(result.data)
+          setShowAdModal(true)
+        }
+      } catch (error) {
+        console.error('Error al cargar candidatos:', error)
+      }
+    }
+
+    loadCandidatos()
+  }, [])
 
   const onSubmit = async (data: LoginFormData) => {
     setLoading(true)
@@ -50,7 +83,13 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex">
+    <>
+      <CandidatosAdModal
+        open={showAdModal}
+        onOpenChange={setShowAdModal}
+        candidatos={candidatos}
+      />
+      <div className="min-h-screen flex">
       {/* Panel Izquierdo - Información */}
       <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-primary/90 to-primary flex-col justify-between p-12 text-white">
         <div className="space-y-8">
@@ -164,6 +203,7 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+    </>
   )
 }
 
