@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { liderSchema, type LiderFormData } from '@/features/lideres/validations/lider'
@@ -23,7 +23,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import type { Profile } from '@/lib/types'
+import type { Profile, Candidato } from '@/lib/types'
 
 interface LiderFormProps {
   open: boolean
@@ -38,6 +38,9 @@ export function LiderForm({
   onSubmit,
   initialData,
 }: LiderFormProps) {
+  const [candidatos, setCandidatos] = useState<Candidato[]>([])
+  const [loadingCandidatos, setLoadingCandidatos] = useState(false)
+
   const form = useForm<LiderFormData>({
     resolver: zodResolver(liderSchema),
     defaultValues: {
@@ -47,10 +50,44 @@ export function LiderForm({
       numero_documento: '',
       fecha_nacimiento: '',
       telefono: '',
+      departamento: '',
+      municipio: '',
+      zona: '',
+      candidato_id: '',
       password: '',
       email: '',
     },
   })
+
+  useEffect(() => {
+    if (open) {
+      // Load candidatos when dialog opens
+      const fetchCandidatos = async () => {
+        setLoadingCandidatos(true)
+        try {
+          const response = await fetch('/api/candidatos')
+          const data = await response.json()
+          if (response.ok) {
+            setCandidatos(data.data || [])
+            // If creating new leader and there's a default candidate, set it
+            if (!initialData) {
+              const defaultCandidato = (data.data || []).find((c: Candidato) => c.es_por_defecto)
+              if (defaultCandidato) {
+                form.setValue('candidato_id', defaultCandidato.id)
+              } else {
+                form.setValue('candidato_id', '')
+              }
+            }
+          }
+        } catch (error) {
+          // Silently fail, candidatos selector will be empty
+        } finally {
+          setLoadingCandidatos(false)
+        }
+      }
+      fetchCandidatos()
+    }
+  }, [open, initialData, form])
 
   useEffect(() => {
     if (initialData) {
@@ -61,6 +98,10 @@ export function LiderForm({
         numero_documento: initialData.numero_documento,
         fecha_nacimiento: initialData.fecha_nacimiento || '',
         telefono: initialData.telefono || '',
+        departamento: initialData.departamento || '',
+        municipio: initialData.municipio || '',
+        zona: initialData.zona || '',
+        candidato_id: initialData.candidato_id || '',
         password: '',
         email: '',
       })
@@ -72,6 +113,10 @@ export function LiderForm({
         numero_documento: '',
         fecha_nacimiento: '',
         telefono: '',
+        departamento: '',
+        municipio: '',
+        zona: '',
+        candidato_id: '',
         password: '',
         email: '',
       })
@@ -178,6 +223,55 @@ export function LiderForm({
                 {...form.register('telefono')}
               />
             </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="departamento">Departamento</Label>
+              <Input
+                id="departamento"
+                {...form.register('departamento')}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="municipio">Municipio</Label>
+              <Input
+                id="municipio"
+                {...form.register('municipio')}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="zona">Zona</Label>
+              <Input
+                id="zona"
+                {...form.register('zona')}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="candidato_id">Candidato</Label>
+            <Select
+              value={form.watch('candidato_id') || 'none'}
+              onValueChange={(value) => form.setValue('candidato_id', value === 'none' ? '' : value)}
+              disabled={loadingCandidatos}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder={loadingCandidatos ? 'Cargando...' : 'Seleccionar candidato'} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Sin candidato</SelectItem>
+                {candidatos.map((candidato) => (
+                  <SelectItem key={candidato.id} value={candidato.id}>
+                    {candidato.nombre_completo}
+                    {candidato.es_por_defecto && ' (Por defecto)'}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {!initialData && 'Si no se selecciona, se asignará automáticamente el candidato por defecto'}
+            </p>
           </div>
 
           {!initialData && (

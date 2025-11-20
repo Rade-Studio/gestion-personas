@@ -11,7 +11,10 @@ export async function GET(request: NextRequest) {
 
     const { data, error } = await supabase
       .from('profiles')
-      .select('*')
+      .select(`
+        *,
+        candidato:candidatos(id, nombre_completo)
+      `)
       .eq('role', 'lider')
       .order('created_at', { ascending: false })
 
@@ -58,6 +61,20 @@ export async function POST(request: NextRequest) {
     const email = validatedData.email?.trim() || `${validatedData.numero_documento}@sistema.local`
     const password = validatedData.password?.trim() || `Lider${validatedData.numero_documento.slice(-4)}`
 
+    // Get default candidate if candidato_id not provided
+    let candidatoId = validatedData.candidato_id?.trim() || null
+    if (!candidatoId) {
+      const { data: defaultCandidato } = await supabase
+        .from('candidatos')
+        .select('id')
+        .eq('es_por_defecto', true)
+        .single()
+      
+      if (defaultCandidato) {
+        candidatoId = defaultCandidato.id
+      }
+    }
+
     // Create auth user using admin client
     const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
       email,
@@ -83,6 +100,10 @@ export async function POST(request: NextRequest) {
         numero_documento: validatedData.numero_documento,
         fecha_nacimiento: validatedData.fecha_nacimiento || null,
         telefono: validatedData.telefono || null,
+        departamento: validatedData.departamento || null,
+        municipio: validatedData.municipio || null,
+        zona: validatedData.zona || null,
+        candidato_id: candidatoId,
         role: 'lider',
       })
       .select()

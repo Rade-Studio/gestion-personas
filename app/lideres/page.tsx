@@ -165,30 +165,38 @@ export default function LideresPage() {
                   <TableHead>Tipo Doc.</TableHead>
                   <TableHead>Número Doc.</TableHead>
                   <TableHead>Teléfono</TableHead>
+                  <TableHead>Departamento</TableHead>
+                  <TableHead>Municipio</TableHead>
+                  <TableHead>Zona</TableHead>
+                  <TableHead>Candidato</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8">
+                    <TableCell colSpan={10} className="text-center py-8">
                       Cargando...
                     </TableCell>
                   </TableRow>
                 ) : lideres.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8">
+                    <TableCell colSpan={10} className="text-center py-8">
                       No hay líderes registrados
                     </TableCell>
                   </TableRow>
                 ) : (
-                  lideres.map((lider) => (
+                  lideres.map((lider: any) => (
                     <TableRow key={lider.id}>
                       <TableCell>{lider.nombres}</TableCell>
                       <TableCell>{lider.apellidos}</TableCell>
                       <TableCell>{lider.tipo_documento}</TableCell>
                       <TableCell>{lider.numero_documento}</TableCell>
                       <TableCell>{lider.telefono || '-'}</TableCell>
+                      <TableCell>{lider.departamento || '-'}</TableCell>
+                      <TableCell>{lider.municipio || '-'}</TableCell>
+                      <TableCell>{lider.zona || '-'}</TableCell>
+                      <TableCell>{lider.candidato?.nombre_completo || '-'}</TableCell>
                       <TableCell className="text-right">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>

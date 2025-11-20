@@ -96,6 +96,7 @@ export async function PUT(
     }
 
     // Update profile
+    const candidatoId = validatedData.candidato_id?.trim() || null
     const { data, error } = await supabase
       .from('profiles')
       .update({
@@ -105,6 +106,10 @@ export async function PUT(
         numero_documento: validatedData.numero_documento,
         fecha_nacimiento: validatedData.fecha_nacimiento || null,
         telefono: validatedData.telefono || null,
+        departamento: validatedData.departamento || null,
+        municipio: validatedData.municipio || null,
+        zona: validatedData.zona || null,
+        candidato_id: candidatoId,
       })
       .eq('id', id)
       .select()
