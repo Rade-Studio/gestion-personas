@@ -10,6 +10,10 @@ export const liderSchema = z.object({
   numero_documento: z.string().min(1, 'El número de documento es obligatorio'),
   fecha_nacimiento: z.string().optional().or(z.literal('')),
   telefono: z.string().optional().or(z.literal('')),
+  departamento: z.string().optional().or(z.literal('')),
+  municipio: z.string().optional().or(z.literal('')),
+  zona: z.string().optional().or(z.literal('')),
+  candidato_id: z.string().uuid().optional().or(z.literal('')),
   password: z.string().optional().or(z.literal('')).refine(
     (val) => !val || val.length >= 6,
     { message: 'La contraseña debe tener al menos 6 caracteres' }

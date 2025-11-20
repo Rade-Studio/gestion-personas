@@ -10,6 +10,10 @@ export interface Profile {
   fecha_nacimiento?: string
   telefono?: string
   role: UserRole
+  departamento?: string
+  municipio?: string
+  zona?: string
+  candidato_id?: string
   created_at: string
   updated_at: string
 }
@@ -63,5 +67,17 @@ export interface Importacion {
 
 export interface PersonaWithConfirmacion extends Persona {
   confirmacion?: VotoConfirmacion
+}
+
+export interface Candidato {
+  id: string
+  nombre_completo: string
+  numero_tarjeton: string
+  imagen_url?: string
+  imagen_path?: string
+  partido_grupo?: string
+  es_por_defecto: boolean
+  created_at: string
+  updated_at: string
 }
 
