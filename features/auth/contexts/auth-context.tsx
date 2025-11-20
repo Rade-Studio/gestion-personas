@@ -66,7 +66,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return
 
       setUser(session?.user ?? null)
@@ -86,6 +86,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       } else {
         setProfile(null)
+        // Si el evento es SIGNED_OUT y estamos en una página protegida, redirigir
+        if (event === 'SIGNED_OUT' && typeof window !== 'undefined') {
+          const currentPath = window.location.pathname
+          if (!currentPath.startsWith('/auth/login') && !currentPath.startsWith('/login')) {
+            window.location.href = '/auth/login'
+          }
+        }
       }
     })
 

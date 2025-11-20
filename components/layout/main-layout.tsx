@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { useAuth } from '@/features/auth/hooks/use-auth'
 import {
@@ -30,8 +30,7 @@ import {
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
 import Link from 'next/link'
-import { LogOut, User, LayoutDashboard, Users, UserCog, Award, Building2 } from 'lucide-react'
-import { toast } from 'sonner'
+import { LogOut, User, LayoutDashboard, Users, UserCog, Award, Building2, Loader2 } from 'lucide-react'
 
 interface MainLayoutProps {
   children: React.ReactNode
@@ -41,17 +40,17 @@ export function MainLayout({ children }: MainLayoutProps) {
   const router = useRouter()
   const pathname = usePathname()
   const { profile, signOut, isAdmin } = useAuth()
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
 
   const handleSignOut = async () => {
+    setIsLoggingOut(true)
+    
     try {
       // Primero llamamos al endpoint del servidor para limpiar cookies
       try {
-        const response = await fetch('/api/auth/logout', {
+        await fetch('/api/auth/logout', {
           method: 'POST',
         })
-        if (!response.ok) {
-          console.error('Error al cerrar sesión en servidor')
-        }
       } catch (serverError) {
         console.error('Error al cerrar sesión en servidor:', serverError)
       }
@@ -59,15 +58,17 @@ export function MainLayout({ children }: MainLayoutProps) {
       // Luego cerramos sesión en el cliente
       await signOut()
       
-      toast.success('Sesión cerrada')
+      // Esperar un momento para mostrar el mensaje de despedida
+      await new Promise(resolve => setTimeout(resolve, 800))
       
-      // Redirigir inmediatamente
+      // Forzar recarga completa para que el middleware detecte el logout
       window.location.href = '/auth/login'
     } catch (error: any) {
       console.error('Error al cerrar sesión:', error)
-      toast.error('Error al cerrar sesión. Por favor, intenta nuevamente.')
-      // Aún así intentamos redirigir
-      window.location.href = '/auth/login'
+      // Aún así intentamos redirigir con recarga completa
+      setTimeout(() => {
+        window.location.href = '/auth/login'
+      }, 1000)
     }
   }
 
@@ -92,6 +93,19 @@ export function MainLayout({ children }: MainLayoutProps) {
 
   return (
     <SidebarProvider>
+      {isLoggingOut && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-4">
+            <Loader2 className="h-12 w-12 animate-spin text-primary" />
+            <div className="text-center space-y-2">
+              <p className="text-lg font-semibold">Cerrando sesión...</p>
+              <p className="text-sm text-muted-foreground">
+                {profile?.nombres ? `¡Hasta pronto, ${profile.nombres}!` : '¡Hasta pronto!'}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
       <Sidebar variant="inset" collapsible="icon">
         <SidebarHeader className="border-b">
           <div className="flex items-center gap-2 px-2 py-4">
@@ -173,9 +187,18 @@ export function MainLayout({ children }: MainLayoutProps) {
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleSignOut}>
-                    <LogOut className="mr-2 h-4 w-4" />
-                    <span>Cerrar Sesión</span>
+                  <DropdownMenuItem onClick={handleSignOut} disabled={isLoggingOut}>
+                    {isLoggingOut ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        <span>Cerrando sesión...</span>
+                      </>
+                    ) : (
+                      <>
+                        <LogOut className="mr-2 h-4 w-4" />
+                        <span>Cerrar Sesión</span>
+                      </>
+                    )}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
