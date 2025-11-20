@@ -28,9 +28,12 @@ Crea un archivo `.env.local` en la raíz del proyecto:
 NEXT_PUBLIC_SUPABASE_URL=tu_url_de_supabase
 NEXT_PUBLIC_SUPABASE_ANON_KEY=tu_clave_anonima_de_supabase
 SUPABASE_SERVICE_ROLE_KEY=tu_service_role_key_de_supabase
+NEXT_PUBLIC_ENABLE_ADMIN_CHARTS=true
 ```
 
 **Importante**: La `SUPABASE_SERVICE_ROLE_KEY` es necesaria para crear usuarios (líderes) desde el panel de administración. Puedes encontrarla en tu dashboard de Supabase en **Settings > API > service_role key**. **Nunca expongas esta clave en el cliente**, solo úsala en el servidor.
+
+**Gráficos de Administrador**: La variable `NEXT_PUBLIC_ENABLE_ADMIN_CHARTS` controla la visualización de gráficos estadísticos avanzados en el dashboard. Solo son visibles para usuarios con rol de administrador. Establece en `true` para habilitar o `false` para deshabilitar.
 
 ### 2. Base de Datos
 
@@ -141,6 +144,10 @@ pp-gestion/
 - Conteo de votos confirmados
 - Conteo de pendientes
 - Filtrado automático por rol
+- Gráficos estadísticos avanzados (solo admin, controlado por `NEXT_PUBLIC_ENABLE_ADMIN_CHARTS`):
+  - Estadísticas por líder (confirmados vs pendientes)
+  - Personas registradas por departamento y municipio
+  - Votos confirmados por departamento y municipio
 
 ## Tecnologías Utilizadas
 
