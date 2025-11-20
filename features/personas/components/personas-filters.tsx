@@ -45,6 +45,8 @@ export function PersonasFilters({
     lider_id: undefined,
     estado: undefined,
   })
+  const [liderSearch, setLiderSearch] = useState('')
+  const [liderSelectOpen, setLiderSelectOpen] = useState(false)
 
   // Apply filters function
   const applyFilters = useCallback(() => {
@@ -178,18 +180,59 @@ export function PersonasFilters({
               <Label className="text-sm font-medium">Líder</Label>
               <Select
                 value={filters.lider_id ? filters.lider_id : 'all'}
-                onValueChange={(value) => handleFilterChange('lider_id', value)}
+                onValueChange={(value) => {
+                  handleFilterChange('lider_id', value)
+                  setLiderSearch('')
+                }}
+                open={liderSelectOpen}
+                onOpenChange={setLiderSelectOpen}
               >
                 <SelectTrigger className="h-10">
                   <SelectValue placeholder="Todos los líderes" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-[300px]">
+                  <div className="sticky top-0 z-10 bg-background p-2 border-b">
+                    <div className="relative">
+                      <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Buscar líder..."
+                        value={liderSearch}
+                        onChange={(e) => setLiderSearch(e.target.value)}
+                        className="pl-8 h-8 text-sm"
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => e.stopPropagation()}
+                      />
+                    </div>
+                  </div>
                   <SelectItem value="all">Todos los líderes</SelectItem>
-                  {lideres.map((lider) => (
-                    <SelectItem key={lider.id} value={lider.id}>
-                      {lider.nombres} {lider.apellidos}
-                    </SelectItem>
-                  ))}
+                  {lideres
+                    .filter((lider) => {
+                      if (!liderSearch.trim()) return true
+                      const searchLower = liderSearch.toLowerCase()
+                      return (
+                        lider.nombres.toLowerCase().includes(searchLower) ||
+                        lider.apellidos.toLowerCase().includes(searchLower) ||
+                        `${lider.nombres} ${lider.apellidos}`.toLowerCase().includes(searchLower)
+                      )
+                    })
+                    .map((lider) => (
+                      <SelectItem key={lider.id} value={lider.id}>
+                        {lider.nombres} {lider.apellidos}
+                      </SelectItem>
+                    ))}
+                  {lideres.filter((lider) => {
+                    if (!liderSearch.trim()) return false
+                    const searchLower = liderSearch.toLowerCase()
+                    return (
+                      lider.nombres.toLowerCase().includes(searchLower) ||
+                      lider.apellidos.toLowerCase().includes(searchLower) ||
+                      `${lider.nombres} ${lider.apellidos}`.toLowerCase().includes(searchLower)
+                    )
+                  }).length === 0 && liderSearch.trim() && (
+                    <div className="px-2 py-1.5 text-sm text-muted-foreground text-center">
+                      No se encontraron líderes
+                    </div>
+                  )}
                 </SelectContent>
               </Select>
             </div>

@@ -21,7 +21,7 @@ import {
 } from '@/components/ui/sheet'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import Link from 'next/link'
-import { LogOut, User, LayoutDashboard, Users, UserCog, Menu } from 'lucide-react'
+import { LogOut, User, LayoutDashboard, Users, UserCog, Menu, Award } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface MainLayoutProps {
@@ -46,7 +46,10 @@ export function MainLayout({ children }: MainLayoutProps) {
   const navItems = [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/personas', label: 'Personas', icon: Users },
-    ...(isAdmin ? [{ href: '/lideres', label: 'Líderes', icon: UserCog }] : []),
+    ...(isAdmin ? [
+      { href: '/lideres', label: 'Líderes', icon: UserCog },
+      { href: '/candidatos', label: 'Candidatos', icon: Award },
+    ] : []),
   ]
 
   return (
