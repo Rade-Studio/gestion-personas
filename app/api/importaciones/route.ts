@@ -286,7 +286,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Update existing personas (only puesto_votacion and mesa_votacion, and only if no confirmation)
+    // Update existing personas (puesto_votacion, mesa_votacion, departamento, municipio, and only if no confirmation)
     if (rowsToUpdate.length > 0) {
       for (const row of rowsToUpdate) {
         const personaId = existingDocumentosMap.get(row.numero_documento)
@@ -297,6 +297,8 @@ export async function POST(request: NextRequest) {
           .update({
             puesto_votacion: row.puesto_votacion || null,
             mesa_votacion: row.mesa_votacion || null,
+            departamento: row.departamento || null,
+            municipio: row.municipio || null,
           })
           .eq('id', personaId)
 
