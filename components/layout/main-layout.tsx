@@ -45,30 +45,68 @@ export function MainLayout({ children }: MainLayoutProps) {
   const handleSignOut = async () => {
     setIsLoggingOut(true)
     
+    // Crear un timeout máximo de 3 segundos para evitar que se quede colgado
+    const maxTimeout = setTimeout(() => {
+      console.warn('Timeout al cerrar sesión, redirigiendo de todas formas')
+      if (typeof window !== 'undefined') {
+        window.location.href = '/auth/login'
+      }
+    }, 3000)
+    
     try {
+      // Crear un AbortController para cancelar las peticiones si es necesario
+      const abortController = new AbortController()
+      
       // Primero llamamos al endpoint del servidor para limpiar cookies
-      try {
-        await fetch('/api/auth/logout', {
-          method: 'POST',
+      const logoutPromise = fetch('/api/auth/logout', {
+        method: 'POST',
+        signal: abortController.signal,
+      }).catch((error) => {
+        if (error.name !== 'AbortError') {
+          console.error('Error al cerrar sesión en servidor:', error)
+        }
+      })
+      
+      // Luego cerramos sesión en el cliente (con timeout propio)
+      const signOutPromise = Promise.race([
+        signOut(),
+        new Promise<void>((resolve) => setTimeout(() => resolve(), 2000))
+      ]).catch((error) => {
+        console.error('Error al cerrar sesión en cliente:', error)
+      })
+      
+      // Ejecutar ambas operaciones en paralelo, pero no esperar más de lo necesario
+      await Promise.allSettled([logoutPromise, signOutPromise])
+      
+      // Limpiar el timeout si todo salió bien
+      clearTimeout(maxTimeout)
+      
+      // Limpiar cookies del cliente manualmente
+      if (typeof document !== 'undefined') {
+        const cookies = document.cookie.split(';')
+        cookies.forEach((cookie) => {
+          const eqPos = cookie.indexOf('=')
+          const name = eqPos > -1 ? cookie.substr(0, eqPos).trim() : cookie.trim()
+          if (name.startsWith('sb-') || name.includes('supabase')) {
+            const domain = window.location.hostname
+            document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`
+            document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=${domain}`
+            document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=.${domain}`
+          }
         })
-      } catch (serverError) {
-        console.error('Error al cerrar sesión en servidor:', serverError)
       }
       
-      // Luego cerramos sesión en el cliente
-      await signOut()
-      
-      // Esperar un momento para mostrar el mensaje de despedida
-      await new Promise(resolve => setTimeout(resolve, 800))
-      
-      // Forzar recarga completa para que el middleware detecte el logout
-      window.location.href = '/auth/login'
-    } catch (error: any) {
-      console.error('Error al cerrar sesión:', error)
-      // Aún así intentamos redirigir con recarga completa
-      setTimeout(() => {
+      // Redirigir inmediatamente
+      if (typeof window !== 'undefined') {
         window.location.href = '/auth/login'
-      }, 1000)
+      }
+    } catch (error: any) {
+      clearTimeout(maxTimeout)
+      console.error('Error al cerrar sesión:', error)
+      // Aún así redirigir con recarga completa
+      if (typeof window !== 'undefined') {
+        window.location.href = '/auth/login'
+      }
     }
   }
 
@@ -165,11 +203,11 @@ export function MainLayout({ children }: MainLayoutProps) {
                     <Avatar className="h-6 w-6 shrink-0">
                       <AvatarFallback className="text-xs">{initials}</AvatarFallback>
                     </Avatar>
-                    <div className="flex flex-col items-start">
-                      <span className="text-sm font-medium">
+                    <div className="flex flex-col items-start min-w-0 flex-1">
+                      <span className="text-sm font-medium truncate w-full" title={`${profile?.nombres} ${profile?.apellidos}`}>
                         {profile?.nombres} {profile?.apellidos}
                       </span>
-                      <span className="text-xs text-muted-foreground">
+                      <span className="text-xs text-muted-foreground truncate w-full">
                         {profile?.role === 'admin' ? 'Administrador' : 'Líder'}
                       </span>
                     </div>
@@ -177,8 +215,8 @@ export function MainLayout({ children }: MainLayoutProps) {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
                   <DropdownMenuLabel>
-                    <div className="flex flex-col space-y-1">
-                      <p className="text-sm font-medium leading-none">
+                    <div className="flex flex-col space-y-1 min-w-0">
+                      <p className="text-sm font-medium leading-none truncate" title={`${profile?.nombres} ${profile?.apellidos}`}>
                         {profile?.nombres} {profile?.apellidos}
                       </p>
                       <p className="text-xs leading-none text-muted-foreground">
