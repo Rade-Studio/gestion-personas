@@ -139,7 +139,12 @@ export default function CandidatosPage() {
       <MainLayout>
         <div className="space-y-6">
           <div className="flex items-center justify-between">
-            <h1 className="text-3xl font-bold">Gestión de Candidatos</h1>
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">Gestión de Candidatos</h1>
+              <p className="text-muted-foreground mt-1.5">
+                Administra los candidatos del sistema
+              </p>
+            </div>
             <Button onClick={handleCreate}>
               <Plus className="mr-2 h-4 w-4" />
               Nuevo Candidato

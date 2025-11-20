@@ -8,7 +8,7 @@ import { useAuth } from '@/features/auth/hooks/use-auth'
 import { PerfilForm } from '@/features/perfil/components/perfil-form'
 
 export default function PerfilPage() {
-  const { profile, loading: authLoading } = useAuth()
+  const { profile, loading: authLoading, refreshProfile } = useAuth()
   const [saving, setSaving] = useState(false)
 
   const handleSubmit = async (data: any) => {
@@ -29,7 +29,7 @@ export default function PerfilPage() {
       }
 
       toast.success('Perfil actualizado exitosamente')
-      window.location.reload()
+      await refreshProfile()
     } catch (error: any) {
       toast.error(error.message)
     } finally {
@@ -56,9 +56,14 @@ export default function PerfilPage() {
   return (
     <MainLayout>
       <div className="space-y-6">
-        <h1 className="text-3xl font-bold">Mi Perfil</h1>
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Mi Perfil</h1>
+          <p className="text-muted-foreground mt-1.5">
+            Administra tu información personal y configuración
+          </p>
+        </div>
 
-        <Card>
+        <Card className="border-2">
           <CardHeader>
             <CardTitle>Información Personal</CardTitle>
             <CardDescription>

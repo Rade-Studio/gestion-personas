@@ -32,6 +32,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Card } from '@/components/ui/card'
 import { Plus, Edit, Trash2, MoreHorizontal } from 'lucide-react'
 import {
   DropdownMenu,
@@ -149,14 +150,19 @@ export default function LideresPage() {
       <MainLayout>
         <div className="space-y-6">
           <div className="flex items-center justify-between">
-            <h1 className="text-3xl font-bold">Gestión de Líderes</h1>
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">Gestión de Líderes</h1>
+              <p className="text-muted-foreground mt-1.5">
+                Administra los líderes del sistema
+              </p>
+            </div>
             <Button onClick={handleCreate}>
               <Plus className="mr-2 h-4 w-4" />
               Nuevo Líder
             </Button>
           </div>
 
-          <div className="rounded-md border">
+          <Card>
             <Table>
               <TableHeader>
                 <TableRow>
@@ -224,7 +230,7 @@ export default function LideresPage() {
                 )}
               </TableBody>
             </Table>
-          </div>
+          </Card>
         </div>
 
         <LiderForm

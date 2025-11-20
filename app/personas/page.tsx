@@ -33,7 +33,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
+import { Progress } from '@/components/ui/progress'
 import { useAuth } from '@/features/auth/hooks/use-auth'
+import { Loader2 } from 'lucide-react'
 
 export default function PersonasPage() {
   const { profile } = useAuth()
@@ -45,6 +47,8 @@ export default function PersonasPage() {
   const [confirmingPersona, setConfirmingPersona] = useState<PersonaWithConfirmacion | null>(null)
   const [importOpen, setImportOpen] = useState(false)
   const [importFile, setImportFile] = useState<File | null>(null)
+  const [importing, setImporting] = useState(false)
+  const [importProgress, setImportProgress] = useState(0)
   const [filters, setFilters] = useState<any>({})
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
@@ -464,49 +468,88 @@ export default function PersonasPage() {
     const formData = new FormData()
     formData.append('file', importFile)
 
+    setImporting(true)
+    setImportProgress(0)
+
+    const loadingToast = toast.loading('Preparando importación...', {
+      id: 'import-loading',
+    })
+
     try {
+      // Simular progreso inicial
+      setImportProgress(10)
+      toast.loading('Leyendo archivo Excel...', {
+        id: 'import-loading',
+      })
+
       const response = await fetch('/api/importaciones', {
         method: 'POST',
         body: formData,
       })
 
+      // Simular progreso durante la carga
+      setImportProgress(50)
+      toast.loading('Procesando registros...', {
+        id: 'import-loading',
+      })
+
       const result = await response.json()
+
+      setImportProgress(80)
+      toast.loading('Guardando datos...', {
+        id: 'import-loading',
+      })
 
       if (!response.ok) {
         throw new Error(result.error || 'Error al importar archivo')
       }
+
+      setImportProgress(100)
+      toast.loading('Finalizando...', {
+        id: 'import-loading',
+      })
+
+      // Pequeño delay para mostrar el 100%
+      await new Promise(resolve => setTimeout(resolve, 300))
+
+      toast.dismiss('import-loading')
 
       // Show report modal
       setImportReport(result)
       setImportReportOpen(true)
       setImportOpen(false)
       setImportFile(null)
+      setImportProgress(0)
       fetchPersonas()
     } catch (error: any) {
+      toast.dismiss('import-loading')
       toast.error(error.message, { duration: 8000 })
+      setImportProgress(0)
+    } finally {
+      setImporting(false)
     }
   }
 
 
   return (
     <MainLayout>
-      <div className="space-y-8">
+      <div className="space-y-6">
         {/* Header Section */}
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-3xl font-semibold tracking-tight">Personas</h1>
-            <p className="text-muted-foreground mt-2">
+            <h1 className="text-3xl font-bold tracking-tight">Personas</h1>
+            <p className="text-muted-foreground mt-1.5">
               Administra y gestiona el registro de votantes
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 flex-wrap">
             <Button variant="outline" onClick={handleDownloadTemplate} size="sm">
               <Download className="h-4 w-4 mr-2" />
               Plantilla
             </Button>
             <Button variant="outline" onClick={handleExportData} size="sm">
               <Download className="h-4 w-4 mr-2" />
-              Exportar Datos
+              Exportar
             </Button>
             <Button variant="outline" onClick={() => setImportOpen(true)} size="sm">
               <Upload className="h-4 w-4 mr-2" />
@@ -521,56 +564,90 @@ export default function PersonasPage() {
 
         {/* Stats Cards */}
         <div className="grid gap-4 md:grid-cols-4">
-          <div className="rounded-xl border bg-card p-6">
-            <div className="flex items-center justify-between">
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-muted-foreground">Total Registradas</p>
-                <p className="text-3xl font-semibold">{stats.total}</p>
+          <Card 
+            className={`border-2 hover:shadow-md transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98] ${
+              !filters.estado ? 'border-primary/50 bg-primary/5 ring-2 ring-primary/20' : ''
+            }`}
+            onClick={() => {
+              setFilters({})
+              setPage(1)
+            }}
+          >
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-muted-foreground">Total Registradas</p>
+                  <p className="text-3xl font-bold">{stats.total.toLocaleString()}</p>
+                </div>
+                <div className="rounded-lg bg-primary/10 p-3">
+                  <Users className="h-5 w-5 text-primary" />
+                </div>
               </div>
-              <div className="rounded-lg bg-primary/10 p-3">
-                <Users className="h-5 w-5 text-primary" />
-              </div>
-            </div>
-          </div>
-          <button
+            </CardContent>
+          </Card>
+          <Card 
+            className={`border-2 hover:shadow-md transition-all cursor-pointer border-red-200/50 bg-red-50/30 hover:scale-[1.02] active:scale-[0.98] hover:border-red-300/50 ${
+              filters.estado === 'missing_data' ? 'border-red-400/70 bg-red-100/50 ring-2 ring-red-300/30' : ''
+            }`}
             onClick={() => {
               setFilters({ estado: 'missing_data' })
               setPage(1)
             }}
-            className="rounded-xl border bg-card p-6 hover:bg-muted/50 transition-colors text-left w-full"
           >
-            <div className="flex items-center justify-between">
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-muted-foreground">Datos Faltantes</p>
-                <p className="text-3xl font-semibold text-destructive">{stats.datosFaltantes}</p>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-muted-foreground">Datos Faltantes</p>
+                  <p className="text-3xl font-bold text-destructive">{stats.datosFaltantes.toLocaleString()}</p>
+                </div>
+                <div className="rounded-lg bg-destructive/10 p-3">
+                  <XCircle className="h-5 w-5 text-destructive" />
+                </div>
               </div>
-              <div className="rounded-lg bg-destructive/10 p-3">
-                <XCircle className="h-5 w-5 text-destructive" />
+            </CardContent>
+          </Card>
+          <Card 
+            className={`border-2 hover:shadow-md transition-all cursor-pointer border-orange-200/50 bg-orange-50/30 hover:scale-[1.02] active:scale-[0.98] hover:border-orange-300/50 ${
+              filters.estado === 'pending' ? 'border-orange-400/70 bg-orange-100/50 ring-2 ring-orange-300/30' : ''
+            }`}
+            onClick={() => {
+              setFilters({ estado: 'pending' })
+              setPage(1)
+            }}
+          >
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-muted-foreground">Pendientes</p>
+                  <p className="text-3xl font-bold text-orange-600">{stats.pendientes.toLocaleString()}</p>
+                </div>
+                <div className="rounded-lg bg-orange-500/10 p-3">
+                  <XCircle className="h-5 w-5 text-orange-600" />
+                </div>
               </div>
-            </div>
-          </button>
-          <div className="rounded-xl border bg-card p-6">
-            <div className="flex items-center justify-between">
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-muted-foreground">Pendientes</p>
-                <p className="text-3xl font-semibold text-[hsl(var(--warning))]">{stats.pendientes}</p>
+            </CardContent>
+          </Card>
+          <Card 
+            className={`border-2 hover:shadow-md transition-all cursor-pointer border-green-200/50 bg-green-50/30 hover:scale-[1.02] active:scale-[0.98] hover:border-green-300/50 ${
+              filters.estado === 'confirmed' ? 'border-green-400/70 bg-green-100/50 ring-2 ring-green-300/30' : ''
+            }`}
+            onClick={() => {
+              setFilters({ estado: 'confirmed' })
+              setPage(1)
+            }}
+          >
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-muted-foreground">Confirmadas</p>
+                  <p className="text-3xl font-bold text-green-600">{stats.confirmadas.toLocaleString()}</p>
+                </div>
+                <div className="rounded-lg bg-green-500/10 p-3">
+                  <CheckCircle2 className="h-5 w-5 text-green-600" />
+                </div>
               </div>
-              <div className="rounded-lg bg-[hsl(var(--warning))]/10 p-3">
-                <XCircle className="h-5 w-5 text-[hsl(var(--warning))]" />
-              </div>
-            </div>
-          </div>
-          <div className="rounded-xl border bg-card p-6">
-            <div className="flex items-center justify-between">
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-muted-foreground">Confirmadas</p>
-                <p className="text-3xl font-semibold text-[hsl(var(--success))]">{stats.confirmadas}</p>
-              </div>
-              <div className="rounded-lg bg-[hsl(var(--success))]/10 p-3">
-                <CheckCircle2 className="h-5 w-5 text-[hsl(var(--success))]" />
-              </div>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Filters */}
@@ -595,30 +672,32 @@ export default function PersonasPage() {
         />
 
         {/* Pagination */}
-        <div className="flex items-center justify-between rounded-xl border bg-card px-6 py-4">
-          <p className="text-sm text-muted-foreground">
-            Página <span className="font-medium text-foreground">{page}</span> de{' '}
-            <span className="font-medium text-foreground">{totalPages}</span>
-          </p>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1 || loading}
-            >
-              Anterior
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages || loading}
-            >
-              Siguiente
-            </Button>
-          </div>
-        </div>
+        <Card>
+          <CardContent className="flex items-center justify-between px-6 py-4">
+            <p className="text-sm text-muted-foreground">
+              Página <span className="font-medium text-foreground">{page}</span> de{' '}
+              <span className="font-medium text-foreground">{totalPages}</span>
+            </p>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1 || loading}
+              >
+                Anterior
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages || loading}
+              >
+                Siguiente
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       <PersonaForm
@@ -635,7 +714,15 @@ export default function PersonasPage() {
         onConfirm={handleConfirmVoto}
       />
 
-      <Dialog open={importOpen} onOpenChange={setImportOpen}>
+      <Dialog open={importOpen} onOpenChange={(open) => {
+        if (!importing) {
+          setImportOpen(open)
+          if (!open) {
+            setImportFile(null)
+            setImportProgress(0)
+          }
+        }
+      }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Importar Personas</DialogTitle>
@@ -651,15 +738,48 @@ export default function PersonasPage() {
                 type="file"
                 accept=".xlsx,.xls"
                 onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                disabled={importing}
               />
             </div>
+
+            {importing && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Importando registros...</span>
+                  <span className="font-medium">{importProgress}%</span>
+                </div>
+                <Progress value={importProgress} className="h-2" />
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Procesando archivo, por favor espere...</span>
+                </div>
+              </div>
+            )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setImportOpen(false)}>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setImportOpen(false)
+                setImportFile(null)
+                setImportProgress(0)
+              }}
+              disabled={importing}
+            >
               Cancelar
             </Button>
-            <Button onClick={handleImportFile} disabled={!importFile}>
-              Importar
+            <Button 
+              onClick={handleImportFile} 
+              disabled={!importFile || importing}
+            >
+              {importing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Importando...
+                </>
+              ) : (
+                'Importar'
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
