@@ -12,9 +12,9 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { toast } from 'sonner'
 import { Users, Shield, BarChart3 } from 'lucide-react'
-import { CandidatosAdModal } from '@/features/auth/components/candidatos-ad-modal'
+import { RepresentantesAdModal } from '@/features/auth/components/representantes-ad-modal'
 
-interface CandidatoPublic {
+interface RepresentantePublic {
   id: string
   nombre_completo: string
   numero_tarjeton: string
@@ -25,7 +25,7 @@ interface CandidatoPublic {
 export default function LoginPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
-  const [candidatos, setCandidatos] = useState<CandidatoPublic[]>([])
+  const [representantes, setRepresentantes] = useState<RepresentantePublic[]>([])
   const [showAdModal, setShowAdModal] = useState(false)
   const supabase = createClient()
 
@@ -38,7 +38,7 @@ export default function LoginPage() {
   })
 
   useEffect(() => {
-    const loadCandidatos = async () => {
+    const loadRepresentantes = async () => {
       const showAds = process.env.NEXT_PUBLIC_SHOW_CANDIDATOS_ADS === 'true'
       
       if (!showAds) return
@@ -48,15 +48,15 @@ export default function LoginPage() {
         const result = await response.json()
 
         if (response.ok && result.data && result.data.length > 0) {
-          setCandidatos(result.data)
+          setRepresentantes(result.data)
           setShowAdModal(true)
         }
       } catch (error) {
-        console.error('Error al cargar candidatos:', error)
+        console.error('Error al cargar representantes:', error)
       }
     }
 
-    loadCandidatos()
+    loadRepresentantes()
   }, [])
 
   const onSubmit = async (data: LoginFormData) => {
@@ -84,19 +84,19 @@ export default function LoginPage() {
 
   return (
     <>
-      <CandidatosAdModal
+      <RepresentantesAdModal
         open={showAdModal}
         onOpenChange={setShowAdModal}
-        candidatos={candidatos}
+        representantes={representantes}
       />
       <div className="min-h-screen flex">
       {/* Panel Izquierdo - Información */}
       <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-primary/90 to-primary flex-col justify-between p-12 text-white">
         <div className="space-y-8">
           <div>
-            <h1 className="text-4xl font-bold mb-4">Sistema de Gestión de Votantes</h1>
+            <h1 className="text-4xl font-bold mb-4">Sistema de Gestión de Personas</h1>
             <p className="text-lg text-primary-foreground/90">
-              Plataforma integral para la administración y seguimiento de votantes electorales
+              Plataforma integral para la administración y seguimiento de personas
             </p>
           </div>
 
@@ -108,7 +108,7 @@ export default function LoginPage() {
               <div>
                 <h3 className="font-semibold text-lg mb-1">Gestión de Personas</h3>
                 <p className="text-primary-foreground/80">
-                  Administra y registra votantes de manera eficiente y organizada
+                  Administra y registra personas de manera eficiente y organizada
                 </p>
               </div>
             </div>
@@ -118,9 +118,9 @@ export default function LoginPage() {
                 <Shield className="h-6 w-6" />
               </div>
               <div>
-                <h3 className="font-semibold text-lg mb-1">Confirmación de Votos</h3>
+                <h3 className="font-semibold text-lg mb-1">Confirmación de Actividades</h3>
                 <p className="text-primary-foreground/80">
-                  Sistema de verificación con evidencia fotográfica para cada voto
+                  Sistema de verificación con evidencia fotográfica para cada actividad
                 </p>
               </div>
             </div>
@@ -137,11 +137,6 @@ export default function LoginPage() {
               </div>
             </div>
           </div>
-        </div>
-
-        <div className="border-t border-white/20 pt-6">
-          <p className="text-sm text-primary-foreground/80 mb-2">Desarrollado por</p>
-          <p className="text-xl font-semibold">RADE Studio S.A.S</p>
         </div>
       </div>
 
@@ -194,12 +189,6 @@ export default function LoginPage() {
               </form>
             </CardContent>
           </Card>
-
-          {/* Mostrar desarrollado por en móvil */}
-          <div className="lg:hidden text-center pt-6 border-t">
-            <p className="text-sm text-muted-foreground mb-1">Desarrollado por</p>
-            <p className="text-sm font-semibold">RADE Studio S.A.S</p>
-          </div>
         </div>
       </div>
     </div>
