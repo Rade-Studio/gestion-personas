@@ -5,7 +5,7 @@ import { MainLayout } from '@/components/layout/main-layout'
 import { PersonaForm } from '@/features/personas/components/persona-form'
 import { PersonasTable } from '@/features/personas/components/personas-table'
 import { PersonasFilters } from '@/features/personas/components/personas-filters'
-import { ConfirmarVotoDialog } from '@/features/personas/components/confirmar-voto-dialog'
+import { ConfirmarActividadDialog } from '@/features/personas/components/confirmar-actividad-dialog'
 import { Button } from '@/components/ui/button'
 import { Plus, Download, Upload, CheckCircle2, XCircle, Users, AlertCircle, Info } from 'lucide-react'
 import { toast } from 'sonner'
@@ -44,7 +44,7 @@ export default function PersonasPage() {
   const [formOpen, setFormOpen] = useState(false)
   const [editingPersona, setEditingPersona] = useState<PersonaWithConfirmacion | null>(null)
   const [saving, setSaving] = useState(false)
-  const [confirmVotoOpen, setConfirmVotoOpen] = useState(false)
+  const [confirmActividadOpen, setConfirmActividadOpen] = useState(false)
   const [confirmingPersona, setConfirmingPersona] = useState<PersonaWithConfirmacion | null>(null)
   const [importOpen, setImportOpen] = useState(false)
   const [importFile, setImportFile] = useState<File | null>(null)
@@ -332,10 +332,10 @@ export default function PersonasPage() {
     const result = await response.json()
 
     if (!response.ok) {
-      throw new Error(result.error || 'Error al confirmar voto')
+      throw new Error(result.error || 'Error al confirmar actividad')
     }
 
-    toast.success('Voto confirmado exitosamente')
+    toast.success('Actividad confirmada exitosamente')
     fetchPersonas()
   }
 
@@ -548,7 +548,7 @@ export default function PersonasPage() {
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Personas</h1>
             <p className="text-muted-foreground mt-1.5">
-              Administra y gestiona el registro de votantes
+              Administra y gestiona el registro de personas
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -674,7 +674,7 @@ export default function PersonasPage() {
           onDelete={handleDeleteClick}
           onConfirmVoto={(persona) => {
             setConfirmingPersona(persona)
-            setConfirmVotoOpen(true)
+            setConfirmActividadOpen(true)
           }}
           onReversarVoto={handleReversarVotoClick}
           loading={loading}
@@ -724,9 +724,9 @@ export default function PersonasPage() {
         loading={saving}
       />
 
-      <ConfirmarVotoDialog
-        open={confirmVotoOpen}
-        onOpenChange={setConfirmVotoOpen}
+      <ConfirmarActividadDialog
+        open={confirmActividadOpen}
+        onOpenChange={setConfirmActividadOpen}
         persona={confirmingPersona}
         onConfirm={handleConfirmVoto}
       />
@@ -829,9 +829,9 @@ export default function PersonasPage() {
       <AlertDialog open={reversarDialogOpen} onOpenChange={setReversarDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Reversar confirmación de voto?</AlertDialogTitle>
+            <AlertDialogTitle>¿Reversar confirmación de actividad?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta acción marcará la confirmación de voto como reversada. La persona volverá a aparecer como pendiente.
+              Esta acción marcará la confirmación de actividad como reversada. La persona volverá a aparecer como pendiente.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -58,7 +58,7 @@ export default function DashboardPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
           <p className="text-muted-foreground mt-1.5">
-            Resumen general del sistema de gestión de votantes
+            Resumen general del sistema de gestión de personas
           </p>
         </div>
 
@@ -91,7 +91,7 @@ export default function DashboardPage() {
           <Card className="border-2 hover:shadow-md transition-shadow border-green-200/50 bg-green-50/30">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
               <CardTitle className="text-sm font-medium text-muted-foreground">
-                Votos Confirmados
+                Actividades Confirmadas
               </CardTitle>
               <div className="rounded-lg bg-green-500/10 p-2.5">
                 <CheckCircle2 className="h-5 w-5 text-green-600" />
@@ -112,7 +112,7 @@ export default function DashboardPage() {
                     </div>
                   </div>
                   <CardDescription className="text-xs">
-                    Personas que ya votaron
+                    Personas con actividad confirmada
                   </CardDescription>
                 </>
               )}
@@ -157,7 +157,7 @@ export default function DashboardPage() {
               <CardHeader>
                 <CardTitle className="text-base">Resumen de Confirmaciones</CardTitle>
                 <CardDescription>
-                  Distribución de votos confirmados y pendientes
+                  Distribución de actividades confirmadas y pendientes
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -202,7 +202,7 @@ export default function DashboardPage() {
                   <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
                     <div>
                       <p className="text-sm font-medium">Tasa de Confirmación</p>
-                      <p className="text-xs text-muted-foreground">Votos confirmados vs total</p>
+                      <p className="text-xs text-muted-foreground">Actividades confirmadas vs total</p>
                     </div>
                     <div className="text-2xl font-bold text-green-600">
                       {porcentajeConfirmadas}%

@@ -122,7 +122,7 @@ export function MainLayout({ children }: MainLayoutProps) {
       ...(isAdmin
         ? [
             { href: '/lideres', label: 'Líderes', icon: UserCog },
-            { href: '/candidatos', label: 'Candidatos', icon: Award },
+            { href: '/candidatos', label: 'Representantes', icon: Award },
           ]
         : []),
     ],
@@ -152,7 +152,7 @@ export function MainLayout({ children }: MainLayoutProps) {
             </div>
             <div className="flex flex-col">
               <span className="text-sm font-semibold">Gestión</span>
-              <span className="text-xs text-muted-foreground">Votantes</span>
+              <span className="text-xs text-muted-foreground">Personas</span>
             </div>
           </div>
         </SidebarHeader>

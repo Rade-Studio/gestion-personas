@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Sistema de Gestión de Votantes",
-  description: "Sistema para gestión de votantes electorales",
+  title: "Sistema de Gestión de Personas",
+  description: "Sistema para gestión de personas",
 };
 
 export default function RootLayout({
