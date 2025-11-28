@@ -174,7 +174,7 @@ export default function LideresPage() {
                   <TableHead>Departamento</TableHead>
                   <TableHead>Municipio</TableHead>
                   <TableHead>Zona</TableHead>
-                  <TableHead>Candidato</TableHead>
+                  <TableHead>Representante</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>

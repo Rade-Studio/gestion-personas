@@ -250,17 +250,17 @@ export function LiderForm({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="candidato_id">Candidato</Label>
+            <Label htmlFor="candidato_id">Representante</Label>
             <Select
               value={form.watch('candidato_id') || 'none'}
               onValueChange={(value) => form.setValue('candidato_id', value === 'none' ? '' : value)}
               disabled={loadingCandidatos}
             >
               <SelectTrigger>
-                <SelectValue placeholder={loadingCandidatos ? 'Cargando...' : 'Seleccionar candidato'} />
+                <SelectValue placeholder={loadingCandidatos ? 'Cargando...' : 'Seleccionar representante'} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">Sin candidato</SelectItem>
+                <SelectItem value="none">Sin representante</SelectItem>
                 {candidatos.map((candidato) => (
                   <SelectItem key={candidato.id} value={candidato.id}>
                     {candidato.nombre_completo}

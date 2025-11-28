@@ -36,7 +36,7 @@ export default function CandidatosPage() {
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.error || 'Error al cargar candidatos')
+        throw new Error(data.error || 'Error al cargar representantes')
       }
 
       setCandidatos(data.data || [])
@@ -94,10 +94,10 @@ export default function CandidatosPage() {
       const result = await response.json()
 
       if (!response.ok) {
-        throw new Error(result.error || 'Error al guardar candidato')
+        throw new Error(result.error || 'Error al guardar representante')
       }
 
-      toast.success(editingCandidato ? 'Candidato actualizado' : 'Candidato creado')
+      toast.success(editingCandidato ? 'Representante actualizado' : 'Representante creado')
       setFormOpen(false)
       setEditingCandidato(null)
       fetchCandidatos()
@@ -122,10 +122,10 @@ export default function CandidatosPage() {
 
       if (!response.ok) {
         const data = await response.json()
-        throw new Error(data.error || 'Error al eliminar candidato')
+        throw new Error(data.error || 'Error al eliminar representante')
       }
 
-      toast.success('Candidato eliminado')
+      toast.success('Representante eliminado')
       setDeleteDialogOpen(false)
       setCandidatoToDelete(null)
       fetchCandidatos()
@@ -140,14 +140,14 @@ export default function CandidatosPage() {
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold tracking-tight">Gestión de Candidatos</h1>
+              <h1 className="text-3xl font-bold tracking-tight">Gestión de Representantes</h1>
               <p className="text-muted-foreground mt-1.5">
-                Administra los candidatos del sistema
+                Administra los representantes del sistema
               </p>
             </div>
             <Button onClick={handleCreate}>
               <Plus className="mr-2 h-4 w-4" />
-              Nuevo Candidato
+              Nuevo Representante
             </Button>
           </div>
 
@@ -168,9 +168,9 @@ export default function CandidatosPage() {
           <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>¿Eliminar candidato?</AlertDialogTitle>
+                <AlertDialogTitle>¿Eliminar representante?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Esta acción no se puede deshacer. Se eliminará permanentemente la información de este candidato y se desasignará de todos los líderes asociados.
+                  Esta acción no se puede deshacer. Se eliminará permanentemente la información de este representante y se desasignará de todos los líderes asociados.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>

@@ -3,6 +3,12 @@ import { createClient } from '@/lib/supabase/server'
 import { requireLiderOrAdmin, getCurrentProfile } from '@/lib/auth/helpers'
 import ExcelJS from 'exceljs'
 import { personaSchema } from '@/features/personas/validations/persona'
+import {
+  isDocumentValidationEnabled,
+  checkDocumentExists,
+  createPerson,
+  getDocumentInfo,
+} from '@/lib/pocketbase/client'
 
 export async function POST(request: NextRequest) {
   try {
@@ -138,6 +144,12 @@ export async function POST(request: NextRequest) {
         if (header.includes('Fecha de Nacimiento')) {
           rowData.fecha_nacimiento = formatDate(cellValue)
         }
+        if (header.includes('Fecha de Expedición')) {
+          rowData.fecha_expedicion = formatDate(cellValue)
+        }
+        if (header.includes('Profesión') || header.includes('Profesion')) {
+          rowData.profesion = cellValue?.toString() || ''
+        }
         if (header.includes('Número de Celular')) {
           rowData.numero_celular = cellValue?.toString() || ''
         }
@@ -164,6 +176,17 @@ export async function POST(request: NextRequest) {
       // Validate row data
       try {
         personaSchema.parse(rowData)
+        
+        // Validar fecha_expedicion si es requerida
+        const fechaExpedicionRequired = process.env.FECHA_EXPEDICION_REQUIRED === 'true'
+        if (fechaExpedicionRequired && (!rowData.fecha_expedicion || rowData.fecha_expedicion.trim() === '')) {
+          errors.push({
+            row: rowNumber,
+            error: 'La fecha de expedición es obligatoria',
+          })
+          return // Skip this row
+        }
+        
         rows.push(rowData)
       } catch (error: any) {
         // Mejorar mensajes de error de validación
@@ -176,6 +199,9 @@ export async function POST(request: NextRequest) {
             }
             if (e.path && e.path.includes('fecha_nacimiento')) {
               return `Fecha de nacimiento inválida: "${rowData.fecha_nacimiento || 'vacío'}". Debe estar en formato YYYY-MM-DD y ser una fecha válida no futura`
+            }
+            if (e.path && e.path.includes('fecha_expedicion')) {
+              return `Fecha de expedición inválida: "${rowData.fecha_expedicion || 'vacío'}". Debe estar en formato YYYY-MM-DD y ser una fecha válida no futura`
             }
             if (e.path && e.path.includes('nombres')) {
               return 'Los nombres son obligatorios'
@@ -320,6 +346,47 @@ export async function POST(request: NextRequest) {
       return existing && (isAdmin || existing.registrado_por === currentLiderId)
     })
 
+    // Validar en PocketBase para filas nuevas si está habilitado
+    let finalNewRows = newRows
+    if (isDocumentValidationEnabled() && newRows.length > 0) {
+      const pocketBaseErrors: Array<{ row: number; error: string }> = []
+      const validNewRows: typeof newRows = []
+
+      for (const row of newRows) {
+        const rowNumber = rows.findIndex(
+          (r) =>
+            r.tipo_documento === row.tipo_documento &&
+            r.numero_documento === row.numero_documento
+        ) + 2
+
+        const documentInfo = await getDocumentInfo(row.numero_documento)
+        if (documentInfo) {
+          // Construir mensaje de error con información del representante
+          let errorMessage = `Ya existe una persona con número de documento "${row.numero_documento}" en el sistema externo`
+          if (documentInfo.place) {
+            errorMessage += ` registrado en el representante "${documentInfo.place}"`
+          } else {
+            errorMessage += ` (sin representante asignado)`
+          }
+
+          pocketBaseErrors.push({
+            row: rowNumber,
+            error: errorMessage,
+          })
+        } else {
+          validNewRows.push(row)
+        }
+      }
+
+      // Agregar errores de PocketBase a la lista de errores
+      if (pocketBaseErrors.length > 0) {
+        errors.push(...pocketBaseErrors)
+      }
+
+      // Usar solo las filas válidas para insertar
+      finalNewRows = validNewRows
+    }
+
     // Check which existing personas have confirmations
     const existingPersonaIds = existingRows
       .map((r) => {
@@ -364,7 +431,7 @@ export async function POST(request: NextRequest) {
       .from('importaciones')
       .insert({
         usuario_id: profile.id,
-        total_registros: rows.length,
+        total_registros: finalNewRows.length + existingRows.length,
         registros_exitosos: 0,
         registros_fallidos: errors.length + rowsToSkip.length,
         archivo_nombre: file.name,
@@ -385,9 +452,20 @@ export async function POST(request: NextRequest) {
     let insertErrors: any[] = []
     let updateErrors: any[] = []
 
+    // Obtener nombre completo del candidato para PocketBase
+    let candidatoNombre: string | null = null
+    if (isDocumentValidationEnabled() && profile.candidato_id) {
+      const { data: candidato } = await supabase
+        .from('candidatos')
+        .select('nombre_completo')
+        .eq('id', profile.candidato_id)
+        .single()
+      candidatoNombre = candidato?.nombre_completo || null
+    }
+
     // Insert new personas
-    if (newRows.length > 0) {
-      const personasToInsert = newRows.map((row) => {
+    if (finalNewRows.length > 0) {
+      const personasToInsert = finalNewRows.map((row) => {
         // Ensure fecha_nacimiento is in correct format (YYYY-MM-DD) or null
         let fechaNacimiento = null
         if (row.fecha_nacimiento && row.fecha_nacimiento.trim()) {
@@ -407,10 +485,32 @@ export async function POST(request: NextRequest) {
             }
           }
         }
+
+        // Ensure fecha_expedicion is in correct format (YYYY-MM-DD) or null
+        let fechaExpedicion = null
+        if (row.fecha_expedicion && row.fecha_expedicion.trim()) {
+          // Validate and format date string
+          const dateStr = row.fecha_expedicion.trim()
+          // Check if it's already in YYYY-MM-DD format
+          if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+            fechaExpedicion = dateStr
+          } else {
+            // Try to parse and reformat
+            const date = new Date(dateStr)
+            if (!isNaN(date.getTime())) {
+              const year = date.getFullYear()
+              const month = String(date.getMonth() + 1).padStart(2, '0')
+              const day = String(date.getDate()).padStart(2, '0')
+              fechaExpedicion = `${year}-${month}-${day}`
+            }
+          }
+        }
         
         return {
           ...row,
           fecha_nacimiento: fechaNacimiento,
+          fecha_expedicion: fechaExpedicion,
+          profesion: row.profesion || null,
           numero_celular: row.numero_celular || null,
           direccion: row.direccion || null,
           barrio: row.barrio || null,
@@ -440,7 +540,7 @@ export async function POST(request: NextRequest) {
             for (let batchIndex = 0; batchIndex < batch.length; batchIndex++) {
               const persona = batch[batchIndex]
               const originalRowIndex = i + batchIndex
-              const originalRow = newRows[originalRowIndex]
+              const originalRow = finalNewRows[originalRowIndex]
               
               // Intentar insertar individualmente para identificar el problema exacto
               const { error: singleError } = await supabase
@@ -459,13 +559,21 @@ export async function POST(request: NextRequest) {
                 })
               } else {
                 insertCount++
+                // Sincronizar con PocketBase si está habilitado
+                if (isDocumentValidationEnabled()) {
+                  await createPerson({
+                    document_number: persona.numero_documento,
+                    place: candidatoNombre,
+                    leader_id: profile.id,
+                  })
+                }
               }
             }
           } else {
             // Otro tipo de error - agregar error para todo el lote
             batch.forEach((persona, batchIndex) => {
               const originalRowIndex = i + batchIndex
-              const originalRow = newRows[originalRowIndex]
+              const originalRow = finalNewRows[originalRowIndex]
               if (originalRow) {
                 insertErrors.push({
                   row: originalRowIndex + 2,
@@ -477,6 +585,16 @@ export async function POST(request: NextRequest) {
           }
         } else {
           insertCount += batch.length
+          // Sincronizar con PocketBase si está habilitado
+          if (isDocumentValidationEnabled() && insertedData) {
+            for (const inserted of insertedData) {
+              await createPerson({
+                document_number: inserted.numero_documento,
+                place: candidatoNombre,
+                leader_id: profile.id,
+              })
+            }
+          }
         }
       }
     }

@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { requireLiderOrAdmin, getCurrentProfile } from '@/lib/auth/helpers'
 import { personaSchema } from '@/features/personas/validations/persona'
+import {
+  isDocumentValidationEnabled,
+  checkDocumentExists,
+  createPerson,
+  getDocumentInfo,
+} from '@/lib/pocketbase/client'
 
 export async function GET(request: NextRequest) {
   try {
@@ -76,18 +82,24 @@ export async function GET(request: NextRequest) {
     })
 
     // Filter by estado (missing_data/pendiente/confirmado) if provided
+    const fechaExpedicionRequired = process.env.FECHA_EXPEDICION_REQUIRED === 'true'
+    
     if (estado === 'missing_data') {
-      transformedData = transformedData.filter((persona: any) => 
-        !persona.puesto_votacion || !persona.mesa_votacion
-      )
+      transformedData = transformedData.filter((persona: any) => {
+        const faltaPuestoOMesa = !persona.puesto_votacion || !persona.mesa_votacion
+        const faltaFechaExpedicion = fechaExpedicionRequired && !persona.fecha_expedicion
+        return faltaPuestoOMesa || faltaFechaExpedicion
+      })
     } else if (estado === 'confirmed') {
       transformedData = transformedData.filter((persona: any) => 
         persona.puesto_votacion && persona.mesa_votacion && 
+        (!fechaExpedicionRequired || persona.fecha_expedicion) &&
         persona.confirmacion && !persona.confirmacion.reversado
       )
     } else if (estado === 'pending') {
       transformedData = transformedData.filter((persona: any) => 
         persona.puesto_votacion && persona.mesa_votacion &&
+        (!fechaExpedicionRequired || persona.fecha_expedicion) &&
         (!persona.confirmacion || persona.confirmacion.reversado)
       )
     }
@@ -123,7 +135,16 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const validatedData = personaSchema.parse(body)
 
-    // Check if numero_documento already exists
+    // Validar fecha_expedicion si es requerida
+    const fechaExpedicionRequired = process.env.FECHA_EXPEDICION_REQUIRED === 'true'
+    if (fechaExpedicionRequired && (!validatedData.fecha_expedicion || validatedData.fecha_expedicion.trim() === '')) {
+      return NextResponse.json(
+        { error: 'La fecha de expedición es obligatoria' },
+        { status: 400 }
+      )
+    }
+
+    // Check if numero_documento already exists in Supabase
     const { data: existing } = await supabase
       .from('personas')
       .select('id')
@@ -137,11 +158,29 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Validar en PocketBase si está habilitado
+    if (isDocumentValidationEnabled()) {
+      const documentInfo = await getDocumentInfo(validatedData.numero_documento)
+      if (documentInfo) {
+        // Construir mensaje de error con información del representante
+        let errorMessage = 'Ya existe una persona con este número de documento en el sistema externo'
+        if (documentInfo.place) {
+          errorMessage += ` registrado en el representante "${documentInfo.place}"`
+        } else {
+          errorMessage += ` (sin representante asignado)`
+        }
+
+        return NextResponse.json({ error: errorMessage }, { status: 400 })
+      }
+    }
+
     const { data, error } = await supabase
       .from('personas')
       .insert({
         ...validatedData,
         fecha_nacimiento: validatedData.fecha_nacimiento || null,
+        fecha_expedicion: validatedData.fecha_expedicion || null,
+        profesion: validatedData.profesion || null,
         numero_celular: validatedData.numero_celular || null,
         direccion: validatedData.direccion || null,
         barrio: validatedData.barrio || null,
@@ -160,6 +199,25 @@ export async function POST(request: NextRequest) {
         { error: error.message },
         { status: 500 }
       )
+    }
+
+    // Sincronizar con PocketBase si está habilitado
+    if (isDocumentValidationEnabled() && data) {
+      let candidatoNombre: string | null = null
+      if (profile.candidato_id) {
+        const { data: candidato } = await supabase
+          .from('candidatos')
+          .select('nombre_completo')
+          .eq('id', profile.candidato_id)
+          .single()
+        candidatoNombre = candidato?.nombre_completo || null
+      }
+
+      await createPerson({
+        document_number: validatedData.numero_documento,
+        place: candidatoNombre,
+        leader_id: profile.id,
+      })
     }
 
     return NextResponse.json({ data }, { status: 201 })
