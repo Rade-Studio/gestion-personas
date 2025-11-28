@@ -193,7 +193,7 @@ export function PersonasTable({
                               className="cursor-pointer"
                             >
                               <CheckCircle2 className="mr-2 h-4 w-4" />
-                              Confirmar Voto
+                              Confirmar Actividad
                             </DropdownMenuItem>
                           )}
                           {isConfirmed(persona) && (
@@ -202,7 +202,7 @@ export function PersonasTable({
                               className="cursor-pointer"
                             >
                               <XCircle className="mr-2 h-4 w-4" />
-                              Reversar Voto
+                              Reversar Confirmación
                             </DropdownMenuItem>
                           )}
                           <DropdownMenuItem 
@@ -233,16 +233,16 @@ export function PersonasTable({
       <Dialog open={!!viewingImage} onOpenChange={() => setViewingImage(null)}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Imagen de Confirmación de Voto</DialogTitle>
+            <DialogTitle>Imagen de Confirmación de Actividad</DialogTitle>
             <DialogDescription>
-              Evidencia de la confirmación de voto
+              Evidencia de la confirmación de actividad
             </DialogDescription>
           </DialogHeader>
           {viewingImage && (
             <div className="relative w-full h-96">
               <Image
                 src={viewingImage}
-                alt="Confirmación de voto"
+                alt="Confirmación de actividad"
                 fill
                 className="object-contain"
               />

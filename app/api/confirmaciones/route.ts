@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
 
     if (existingConfirmacion) {
       return NextResponse.json(
-        { error: 'Esta persona ya tiene un voto confirmado' },
+        { error: 'Esta persona ya tiene una actividad confirmada' },
         { status: 400 }
       )
     }
