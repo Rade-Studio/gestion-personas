@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { requireLiderOrAdmin, getCurrentProfile } from '@/lib/auth/helpers'
 import { personaSchema } from '@/features/personas/validations/persona'
+import { isDocumentValidationEnabled, deletePerson } from '@/lib/pocketbase/client'
 
 export async function GET(
   request: NextRequest,
@@ -16,14 +17,13 @@ export async function GET(
       .from('personas')
       .select('*, voto_confirmaciones(*), profiles!personas_registrado_por_fkey(nombres, apellidos)')
       .eq('id', id)
-      .single()
 
     // If lider, only allow access to own personas
     if (profile.role === 'lider') {
       query = query.eq('registrado_por', profile.id)
     }
 
-    const { data, error } = await query
+    const { data, error } = await query.single()
 
     if (error) {
       return NextResponse.json(
@@ -72,13 +72,12 @@ export async function PUT(
       .from('personas')
       .select('id, numero_documento, registrado_por')
       .eq('id', id)
-      .single()
 
     if (profile.role === 'lider') {
       personaQuery = personaQuery.eq('registrado_por', profile.id)
     }
 
-    const { data: existingPersona, error: personaError } = await personaQuery
+    const { data: existingPersona, error: personaError } = await personaQuery.single()
 
     if (personaError || !existingPersona) {
       return NextResponse.json(
@@ -89,6 +88,15 @@ export async function PUT(
 
     const body = await request.json()
     const validatedData = personaSchema.parse(body)
+
+    // Validar fecha_expedicion si es requerida
+    const fechaExpedicionRequired = process.env.FECHA_EXPEDICION_REQUIRED === 'true'
+    if (fechaExpedicionRequired && (!validatedData.fecha_expedicion || validatedData.fecha_expedicion.trim() === '')) {
+      return NextResponse.json(
+        { error: 'La fecha de expedición es obligatoria' },
+        { status: 400 }
+      )
+    }
 
     // Check if numero_documento already exists (excluding current record)
     if (validatedData.numero_documento !== existingPersona.numero_documento) {
@@ -112,6 +120,8 @@ export async function PUT(
       .update({
         ...validatedData,
         fecha_nacimiento: validatedData.fecha_nacimiento || null,
+        fecha_expedicion: validatedData.fecha_expedicion || null,
+        profesion: validatedData.profesion || null,
         numero_celular: validatedData.numero_celular || null,
         direccion: validatedData.direccion || null,
         barrio: validatedData.barrio || null,
@@ -159,15 +169,14 @@ export async function DELETE(
     // Check if persona exists and user has permission
     let personaQuery = supabase
       .from('personas')
-      .select('id, registrado_por')
+      .select('id, numero_documento, registrado_por')
       .eq('id', id)
-      .single()
 
     if (profile.role === 'lider') {
       personaQuery = personaQuery.eq('registrado_por', profile.id)
     }
 
-    const { data: existingPersona, error: personaError } = await personaQuery
+    const { data: existingPersona, error: personaError } = await personaQuery.single()
 
     if (personaError || !existingPersona) {
       return NextResponse.json(
@@ -186,6 +195,11 @@ export async function DELETE(
         { error: error.message },
         { status: 500 }
       )
+    }
+
+    // Eliminar también de PocketBase si está habilitado
+    if (isDocumentValidationEnabled() && existingPersona.numero_documento) {
+      await deletePerson(existingPersona.numero_documento)
     }
 
     return NextResponse.json({ success: true })

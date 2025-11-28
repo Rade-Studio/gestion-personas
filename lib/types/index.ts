@@ -25,6 +25,8 @@ export interface Persona {
   tipo_documento: DocumentoTipo
   numero_documento: string
   fecha_nacimiento?: string
+  fecha_expedicion?: string
+  profesion?: string
   edad?: number
   numero_celular?: string
   direccion?: string

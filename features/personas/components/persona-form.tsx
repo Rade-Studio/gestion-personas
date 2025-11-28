@@ -49,6 +49,8 @@ export function PersonaForm({
       tipo_documento: 'CC',
       numero_documento: '',
       fecha_nacimiento: '',
+      fecha_expedicion: '',
+      profesion: '',
       numero_celular: '',
       direccion: '',
       barrio: '',
@@ -68,6 +70,8 @@ export function PersonaForm({
         tipo_documento: initialData.tipo_documento || 'CC',
         numero_documento: initialData.numero_documento || '',
         fecha_nacimiento: initialData.fecha_nacimiento || '',
+        fecha_expedicion: initialData.fecha_expedicion || '',
+        profesion: initialData.profesion || '',
         numero_celular: initialData.numero_celular || '',
         direccion: initialData.direccion || '',
         barrio: initialData.barrio || '',
@@ -83,6 +87,8 @@ export function PersonaForm({
         tipo_documento: 'CC',
         numero_documento: '',
         fecha_nacimiento: '',
+        fecha_expedicion: '',
+        profesion: '',
         numero_celular: '',
         direccion: '',
         barrio: '',
@@ -216,6 +222,37 @@ export function PersonaForm({
                   <FormLabel>Fecha de Nacimiento</FormLabel>
                   <FormControl>
                     <Input type="date" {...field} disabled={loading} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="fecha_expedicion"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>
+                    Fecha de Expedición
+                    {process.env.NEXT_PUBLIC_FECHA_EXPEDICION_REQUIRED === 'true' && ' *'}
+                  </FormLabel>
+                  <FormControl>
+                    <Input type="date" {...field} disabled={loading} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="profesion"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Profesión</FormLabel>
+                  <FormControl>
+                    <Input {...field} disabled={loading} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

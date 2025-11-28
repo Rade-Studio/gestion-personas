@@ -30,6 +30,15 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=tu_clave_anonima_de_supabase
 SUPABASE_SERVICE_ROLE_KEY=tu_service_role_key_de_supabase
 NEXT_PUBLIC_ENABLE_ADMIN_CHARTS=true
 NEXT_PUBLIC_SHOW_CANDIDATOS_ADS=true
+
+# Validación de Documentos con PocketBase (Opcional)
+DOCUMENTO_VALIDATION_ENABLED=false
+POCKETBASE_URL=http://localhost:8090
+POCKETBASE_EMAIL=tu_email_de_pocketbase
+POCKETBASE_PASSWORD=tu_contraseña_de_pocketbase
+
+# Fecha de Expedición (Opcional)
+FECHA_EXPEDICION_REQUIRED=false
 ```
 
 **Importante**: La `SUPABASE_SERVICE_ROLE_KEY` es necesaria para crear usuarios (líderes) desde el panel de administración. Puedes encontrarla en tu dashboard de Supabase en **Settings > API > service_role key**. **Nunca expongas esta clave en el cliente**, solo úsala en el servidor.
@@ -37,6 +46,10 @@ NEXT_PUBLIC_SHOW_CANDIDATOS_ADS=true
 **Gráficos de Administrador**: La variable `NEXT_PUBLIC_ENABLE_ADMIN_CHARTS` controla la visualización de gráficos estadísticos avanzados en el dashboard. Solo son visibles para usuarios con rol de administrador. Establece en `true` para habilitar o `false` para deshabilitar.
 
 **Publicidad de Candidatos**: La variable `NEXT_PUBLIC_SHOW_CANDIDATOS_ADS` controla la visualización del modal de publicidad de candidatos en la página de login. Establece en `true` para habilitar o `false` para deshabilitar. Cuando está habilitado, el modal se muestra automáticamente al cargar la página de login con la información de los candidatos disponibles.
+
+**Validación de Documentos con PocketBase**: Las variables `DOCUMENTO_VALIDATION_ENABLED`, `POCKETBASE_URL`, `POCKETBASE_EMAIL` y `POCKETBASE_PASSWORD` controlan la validación intermedia de documentos duplicados mediante PocketBase. Cuando está habilitado (`DOCUMENTO_VALIDATION_ENABLED=true`), el sistema valida si un número de documento ya existe en PocketBase antes de registrar o importar personas. Si el documento existe, se omite el registro. Si no existe, se crea en Supabase y se sincroniza con PocketBase. Al eliminar una persona, también se elimina de PocketBase. Si PocketBase no está disponible o la validación está deshabilitada, el sistema continúa funcionando normalmente solo con Supabase.
+
+**Fecha de Expedición**: La variable `FECHA_EXPEDICION_REQUIRED` controla si el campo `fecha_expedicion` es obligatorio u opcional. Cuando está configurado como `true`, el campo es requerido al crear o actualizar personas desde el formulario o al importar desde Excel. Si falta este campo cuando es obligatorio, la persona estará en estado "missing_data" (Datos Faltantes) en lugar de "pending" (Pendiente). Cuando está configurado como `false`, el campo es opcional y no afecta el estado de la persona.
 
 ### 2. Base de Datos
 

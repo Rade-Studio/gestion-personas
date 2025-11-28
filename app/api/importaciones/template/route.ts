@@ -13,6 +13,8 @@ export async function GET() {
       { header: 'Tipo de Documento', key: 'tipo_documento', width: 18 },
       { header: 'Número de Documento', key: 'numero_documento', width: 20 },
       { header: 'Fecha de Nacimiento', key: 'fecha_nacimiento', width: 20 },
+      { header: 'Fecha de Expedición', key: 'fecha_expedicion', width: 20 },
+      { header: 'Profesión', key: 'profesion', width: 20 },
       { header: 'Número de Celular', key: 'numero_celular', width: 18 },
       { header: 'Dirección', key: 'direccion', width: 30 },
       { header: 'Barrio', key: 'barrio', width: 20 },
@@ -37,6 +39,8 @@ export async function GET() {
       tipo_documento: 'CC',
       numero_documento: 'Ejemplo: 1234567890',
       fecha_nacimiento: 'Ejemplo: 1990-01-15',
+      fecha_expedicion: 'Ejemplo: 2010-05-20',
+      profesion: 'Ejemplo: Ingeniero',
       numero_celular: 'Ejemplo: 3001234567',
       direccion: 'Ejemplo: Calle 123 #45-67',
       barrio: 'Ejemplo: Centro',
@@ -47,12 +51,14 @@ export async function GET() {
     })
 
     // Add instructions row
+    const fechaExpedicionRequired = process.env.FECHA_EXPEDICION_REQUIRED === 'true'
     worksheet.addRow({
       nombres: 'NOTA: Los campos marcados con * son obligatorios',
       apellidos: '',
       tipo_documento: 'Tipos: CC, CE, Pasaporte, TI, Otro',
       numero_documento: '',
       fecha_nacimiento: 'Formato: YYYY-MM-DD',
+      fecha_expedicion: fechaExpedicionRequired ? 'Formato: YYYY-MM-DD (Obligatorio)' : 'Formato: YYYY-MM-DD',
       numero_celular: '',
       direccion: '',
       barrio: '',

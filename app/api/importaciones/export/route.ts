@@ -65,18 +65,24 @@ export async function GET(request: NextRequest) {
     })
 
     // Filter by estado (missing_data/pendiente/confirmado) if provided
+    const fechaExpedicionRequired = process.env.FECHA_EXPEDICION_REQUIRED === 'true'
+    
     if (estado === 'missing_data') {
-      transformedData = transformedData.filter((persona: any) => 
-        !persona.puesto_votacion || !persona.mesa_votacion
-      )
+      transformedData = transformedData.filter((persona: any) => {
+        const faltaPuestoOMesa = !persona.puesto_votacion || !persona.mesa_votacion
+        const faltaFechaExpedicion = fechaExpedicionRequired && !persona.fecha_expedicion
+        return faltaPuestoOMesa || faltaFechaExpedicion
+      })
     } else if (estado === 'confirmed') {
       transformedData = transformedData.filter((persona: any) => 
         persona.puesto_votacion && persona.mesa_votacion && 
+        (!fechaExpedicionRequired || persona.fecha_expedicion) &&
         persona.confirmacion && !persona.confirmacion.reversado
       )
     } else if (estado === 'pending') {
       transformedData = transformedData.filter((persona: any) => 
         persona.puesto_votacion && persona.mesa_votacion &&
+        (!fechaExpedicionRequired || persona.fecha_expedicion) &&
         (!persona.confirmacion || persona.confirmacion.reversado)
       )
     }
@@ -92,6 +98,8 @@ export async function GET(request: NextRequest) {
       { header: 'Tipo de Documento', key: 'tipo_documento', width: 18 },
       { header: 'Número de Documento', key: 'numero_documento', width: 20 },
       { header: 'Fecha de Nacimiento', key: 'fecha_nacimiento', width: 20 },
+      { header: 'Fecha de Expedición', key: 'fecha_expedicion', width: 20 },
+      { header: 'Profesión', key: 'profesion', width: 20 },
       { header: 'Número de Celular', key: 'numero_celular', width: 18 },
       { header: 'Dirección', key: 'direccion', width: 30 },
       { header: 'Barrio', key: 'barrio', width: 20 },
@@ -117,6 +125,8 @@ export async function GET(request: NextRequest) {
         tipo_documento: persona.tipo_documento || '',
         numero_documento: persona.numero_documento || '',
         fecha_nacimiento: persona.fecha_nacimiento || '',
+        fecha_expedicion: persona.fecha_expedicion || '',
+        profesion: persona.profesion || '',
         numero_celular: persona.numero_celular || '',
         direccion: persona.direccion || '',
         barrio: persona.barrio || '',
