@@ -5,7 +5,7 @@ export const liderSchema = z.object({
   nombres: z.string().min(1, 'Los nombres son obligatorios'),
   apellidos: z.string().min(1, 'Los apellidos son obligatorios'),
   tipo_documento: z.enum(documentoTipos, {
-    errorMap: () => ({ message: 'Tipo de documento inválido' }),
+    message: 'Tipo de documento inválido',
   }),
   numero_documento: z.string().min(1, 'El número de documento es obligatorio'),
   fecha_nacimiento: z.string().optional().or(z.literal('')),

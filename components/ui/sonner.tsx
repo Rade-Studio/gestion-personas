@@ -31,12 +31,6 @@ const Toaster = ({ ...props }: ToasterProps) => {
           warning: "bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))] border-[hsl(var(--warning))]",
           success: "bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] border-[hsl(var(--success))]",
         },
-        duration: {
-          error: 8000,
-          warning: 6000,
-          success: 4000,
-          info: 4000,
-        },
       }}
       style={
         {

@@ -39,13 +39,12 @@ export async function POST(request: NextRequest) {
       .from('personas')
       .select('id, registrado_por')
       .eq('id', personaId)
-      .single()
 
     if (profile.role === 'lider') {
       personaQuery = personaQuery.eq('registrado_por', profile.id)
     }
 
-    const { data: persona, error: personaError } = await personaQuery
+    const { data: persona, error: personaError } = await personaQuery.single()
 
     if (personaError || !persona) {
       return NextResponse.json(
