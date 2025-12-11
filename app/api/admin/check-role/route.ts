@@ -15,6 +15,7 @@ export async function GET() {
     return NextResponse.json({
       role: profile.role,
       isAdmin: profile.role === 'admin',
+      isCoordinador: profile.role === 'coordinador',
       isLider: profile.role === 'lider',
       profile,
     })

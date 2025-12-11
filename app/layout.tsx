@@ -17,6 +17,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Sistema de Gestión de Personas",
   description: "Sistema para gestión de personas",
+  icons: {
+    icon: "/logo.ico",
+  },
 };
 
 export default function RootLayout({

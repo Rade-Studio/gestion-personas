@@ -1,28 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { requireCoordinadorOrAdmin, getCurrentProfile } from '@/lib/auth/helpers'
-import { liderSchema } from '@/features/lideres/validations/lider'
+import { requireAdmin } from '@/lib/auth/helpers'
+import { coordinadorSchema } from '@/features/coordinadores/validations/coordinador'
 
 export async function GET(request: NextRequest) {
   try {
-    const profile = await requireCoordinadorOrAdmin()
+    await requireAdmin()
     const supabase = await createClient()
 
-    let query = supabase
+    const { data: coordinadores, error } = await supabase
       .from('profiles')
       .select(`
         *,
         candidato:candidatos(id, nombre_completo)
       `)
-      .eq('role', 'lider')
-
-    // Coordinadores solo ven sus líderes, admins ven todos
-    if (profile.role === 'coordinador') {
-      query = query.eq('coordinador_id', profile.id)
-    }
-
-    const { data, error } = await query.order('created_at', { ascending: false })
+      .eq('role', 'coordinador')
+      .order('created_at', { ascending: false })
 
     if (error) {
       return NextResponse.json(
@@ -31,7 +25,27 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    return NextResponse.json({ data: data || [] })
+    // Obtener conteo de líderes para cada coordinador
+    if (coordinadores && coordinadores.length > 0) {
+      const coordinadoresConLideres = await Promise.all(
+        coordinadores.map(async (coordinador) => {
+          const { count } = await supabase
+            .from('profiles')
+            .select('id', { count: 'exact', head: true })
+            .eq('coordinador_id', coordinador.id)
+            .eq('role', 'lider')
+          
+          return {
+            ...coordinador,
+            lideres_count: count || 0,
+          }
+        })
+      )
+
+      return NextResponse.json({ data: coordinadoresConLideres })
+    }
+
+    return NextResponse.json({ data: coordinadores || [] })
   } catch (error: any) {
     return NextResponse.json(
       { error: error.message || 'Error en el servidor' },
@@ -42,12 +56,12 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const profile = await requireCoordinadorOrAdmin()
+    await requireAdmin()
     const supabase = await createClient()
     const adminClient = createAdminClient()
 
     const body = await request.json()
-    const validatedData = liderSchema.parse(body)
+    const validatedData = coordinadorSchema.parse(body)
 
     // Check if numero_documento already exists
     const { data: existing } = await supabase
@@ -65,15 +79,11 @@ export async function POST(request: NextRequest) {
 
     // Generate default email if not provided
     const email = validatedData.email?.trim() || `${validatedData.numero_documento}@sistema.local`
-    const password = validatedData.password?.trim() || `Lider${validatedData.numero_documento.slice(-4)}`
+    const password = validatedData.password?.trim() || `Coordinador${validatedData.numero_documento.slice(-4)}`
 
-    // Get candidato_id: coordinadores heredan su candidato, admins pueden especificar o usar default
+    // Get default candidate if candidato_id not provided
     let candidatoId = validatedData.candidato_id?.trim() || null
-    if (profile.role === 'coordinador') {
-      // Coordinadores: heredar candidato del coordinador
-      candidatoId = profile.candidato_id || null
-    } else if (!candidatoId) {
-      // Admins: usar candidato por defecto si no se especifica
+    if (!candidatoId) {
       const { data: defaultCandidato } = await supabase
         .from('candidatos')
         .select('id')
@@ -83,13 +93,6 @@ export async function POST(request: NextRequest) {
       if (defaultCandidato) {
         candidatoId = defaultCandidato.id
       }
-    }
-
-    // Determine coordinador_id
-    let coordinadorId = profile.role === 'coordinador' ? profile.id : null
-    // Admins can specify coordinador_id from the form
-    if (profile.role === 'admin' && validatedData.coordinador_id?.trim()) {
-      coordinadorId = validatedData.coordinador_id.trim()
     }
 
     // Create auth user using admin client
@@ -107,7 +110,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create profile using admin client to bypass RLS
-    const { data: newProfile, error: profileError } = await adminClient
+    const { data: profile, error: profileError } = await adminClient
       .from('profiles')
       .insert({
         id: authData.user.id,
@@ -121,8 +124,7 @@ export async function POST(request: NextRequest) {
         municipio: validatedData.municipio || null,
         zona: validatedData.zona || null,
         candidato_id: candidatoId,
-        coordinador_id: coordinadorId,
-        role: 'lider',
+        role: 'coordinador',
       })
       .select()
       .single()
@@ -138,7 +140,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(
       {
-        data: newProfile,
+        data: profile,
         credentials: {
           email,
           password,

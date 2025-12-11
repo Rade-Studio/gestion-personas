@@ -12,6 +12,7 @@ interface AuthContextType {
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
   isAdmin: boolean
+  isCoordinador: boolean
   isLider: boolean
 }
 
@@ -138,6 +139,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const isAdmin = useMemo(() => profile?.role === 'admin', [profile?.role])
+  const isCoordinador = useMemo(() => profile?.role === 'coordinador', [profile?.role])
   const isLider = useMemo(() => profile?.role === 'lider', [profile?.role])
 
   const value = useMemo(
@@ -148,9 +150,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signOut,
       refreshProfile,
       isAdmin,
+      isCoordinador,
       isLider,
     }),
-    [user, profile, loading, isAdmin, isLider]
+    [user, profile, loading, isAdmin, isCoordinador, isLider]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

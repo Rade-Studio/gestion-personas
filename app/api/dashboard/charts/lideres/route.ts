@@ -1,17 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { requireAdmin } from '@/lib/auth/helpers'
+import { requireCoordinadorOrAdmin, getCurrentProfile } from '@/lib/auth/helpers'
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAdmin()
+    const profile = await requireCoordinadorOrAdmin()
     const supabase = await createClient()
 
-    // Obtener todos los líderes con sus personas registradas
-    const { data: lideres, error: lideresError } = await supabase
+    // Obtener líderes según el rol
+    let lideresQuery = supabase
       .from('profiles')
       .select('id, nombres, apellidos')
       .eq('role', 'lider')
+
+    // Coordinadores solo ven sus líderes
+    if (profile.role === 'coordinador') {
+      lideresQuery = lideresQuery.eq('coordinador_id', profile.id)
+    }
+
+    const { data: lideres, error: lideresError } = await lideresQuery
 
     if (lideresError) {
       throw new Error('Error al obtener líderes: ' + lideresError.message)

@@ -23,6 +23,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { useAuth } from '@/features/auth/hooks/use-auth'
 import type { Profile, Candidato } from '@/lib/types'
 
 interface LiderFormProps {
@@ -38,8 +39,11 @@ export function LiderForm({
   onSubmit,
   initialData,
 }: LiderFormProps) {
+  const { profile: currentProfile, isCoordinador, isAdmin } = useAuth()
   const [candidatos, setCandidatos] = useState<Candidato[]>([])
+  const [coordinadores, setCoordinadores] = useState<Profile[]>([])
   const [loadingCandidatos, setLoadingCandidatos] = useState(false)
+  const [loadingCoordinadores, setLoadingCoordinadores] = useState(false)
 
   const form = useForm<LiderFormData>({
     resolver: zodResolver(liderSchema),
@@ -54,6 +58,7 @@ export function LiderForm({
       municipio: '',
       zona: '',
       candidato_id: '',
+      coordinador_id: '',
       password: '',
       email: '',
     },
@@ -61,7 +66,7 @@ export function LiderForm({
 
   useEffect(() => {
     if (open) {
-      // Load candidatos when dialog opens
+      // Load candidatos when dialog opens (for admins and to show coordinador's candidato)
       const fetchCandidatos = async () => {
         setLoadingCandidatos(true)
         try {
@@ -69,8 +74,8 @@ export function LiderForm({
           const data = await response.json()
           if (response.ok) {
             setCandidatos(data.data || [])
-            // If creating new leader and there's a default candidate, set it
-            if (!initialData) {
+            // If creating new leader and there's a default candidate, set it (only for admins)
+            if (!initialData && isAdmin) {
               const defaultCandidato = (data.data || []).find((c: Candidato) => c.es_por_defecto)
               if (defaultCandidato) {
                 form.setValue('candidato_id', defaultCandidato.id)
@@ -85,9 +90,30 @@ export function LiderForm({
           setLoadingCandidatos(false)
         }
       }
+
+      // Load coordinadores when dialog opens (only for admins)
+      const fetchCoordinadores = async () => {
+        if (!isAdmin) return
+        setLoadingCoordinadores(true)
+        try {
+          const response = await fetch('/api/coordinadores')
+          const data = await response.json()
+          if (response.ok) {
+            setCoordinadores(data.data || [])
+          }
+        } catch (error) {
+          // Silently fail
+        } finally {
+          setLoadingCoordinadores(false)
+        }
+      }
+
       fetchCandidatos()
+      if (isAdmin) {
+        fetchCoordinadores()
+      }
     }
-  }, [open, initialData, form])
+  }, [open, initialData, form, isAdmin])
 
   useEffect(() => {
     if (initialData) {
@@ -102,6 +128,7 @@ export function LiderForm({
         municipio: initialData.municipio || '',
         zona: initialData.zona || '',
         candidato_id: initialData.candidato_id || '',
+        coordinador_id: initialData.coordinador_id || '',
         password: '',
         email: '',
       })
@@ -117,6 +144,7 @@ export function LiderForm({
         municipio: '',
         zona: '',
         candidato_id: '',
+        coordinador_id: '',
         password: '',
         email: '',
       })
@@ -249,30 +277,72 @@ export function LiderForm({
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="candidato_id">Representante</Label>
-            <Select
-              value={form.watch('candidato_id') || 'none'}
-              onValueChange={(value) => form.setValue('candidato_id', value === 'none' ? '' : value)}
-              disabled={loadingCandidatos}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder={loadingCandidatos ? 'Cargando...' : 'Seleccionar representante'} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Sin representante</SelectItem>
-                {candidatos.map((candidato) => (
-                  <SelectItem key={candidato.id} value={candidato.id}>
-                    {candidato.nombre_completo}
-                    {candidato.es_por_defecto && ' (Por defecto)'}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              {!initialData && 'Si no se selecciona, se asignará automáticamente el candidato por defecto'}
-            </p>
-          </div>
+          {isCoordinador && !initialData && (
+            <div className="space-y-2 p-4 bg-muted rounded-md">
+              <p className="text-sm font-medium">Información del Coordinador</p>
+              <p className="text-xs text-muted-foreground">
+                El líder heredará automáticamente el representante asignado a su coordinador.
+                {currentProfile?.candidato_id && (
+                  <span className="block mt-1">
+                    Representante actual: <strong>{candidatos.find(c => c.id === currentProfile.candidato_id)?.nombre_completo || 'No asignado'}</strong>
+                  </span>
+                )}
+              </p>
+            </div>
+          )}
+
+          {isAdmin && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="coordinador_id">Coordinador (opcional)</Label>
+                <Select
+                  value={form.watch('coordinador_id') || 'none'}
+                  onValueChange={(value) => form.setValue('coordinador_id', value === 'none' ? '' : value)}
+                  disabled={loadingCoordinadores}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={loadingCoordinadores ? 'Cargando...' : 'Seleccionar coordinador'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sin coordinador</SelectItem>
+                    {coordinadores.map((coordinador) => (
+                      <SelectItem key={coordinador.id} value={coordinador.id}>
+                        {coordinador.nombres} {coordinador.apellidos}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Si se selecciona un coordinador, el líder heredará su representante
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="candidato_id">Representante</Label>
+                <Select
+                  value={form.watch('candidato_id') || 'none'}
+                  onValueChange={(value) => form.setValue('candidato_id', value === 'none' ? '' : value)}
+                  disabled={loadingCandidatos}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={loadingCandidatos ? 'Cargando...' : 'Seleccionar representante'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sin representante</SelectItem>
+                    {candidatos.map((candidato) => (
+                      <SelectItem key={candidato.id} value={candidato.id}>
+                        {candidato.nombre_completo}
+                        {candidato.es_por_defecto && ' (Por defecto)'}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  {!initialData && 'Si no se selecciona, se asignará automáticamente el candidato por defecto'}
+                </p>
+              </div>
+            </>
+          )}
 
           {!initialData && (
             <div className="grid grid-cols-2 gap-4">

@@ -1,30 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { requireCoordinadorOrAdmin, getCurrentProfile } from '@/lib/auth/helpers'
-import { liderSchema } from '@/features/lideres/validations/lider'
+import { requireAdmin } from '@/lib/auth/helpers'
+import { coordinadorSchema } from '@/features/coordinadores/validations/coordinador'
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const profile = await requireCoordinadorOrAdmin()
+    await requireAdmin()
     const { id } = await params
     const supabase = await createClient()
 
-    let query = supabase
+    const { data, error } = await supabase
       .from('profiles')
-      .select('*')
+      .select(`
+        *,
+        candidato:candidatos(id, nombre_completo)
+      `)
       .eq('id', id)
-      .eq('role', 'lider')
-
-    // Coordinadores solo pueden ver sus propios líderes
-    if (profile.role === 'coordinador') {
-      query = query.eq('coordinador_id', profile.id)
-    }
-
-    const { data, error } = await query.single()
+      .eq('role', 'coordinador')
+      .single()
 
     if (error) {
       return NextResponse.json(
@@ -47,29 +44,24 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const profile = await requireCoordinadorOrAdmin()
+    await requireAdmin()
     const { id } = await params
     const supabase = await createClient()
 
     const body = await request.json()
-    const validatedData = liderSchema.parse(body)
+    const validatedData = coordinadorSchema.parse(body)
 
-    // Check if lider exists and belongs to coordinador if applicable
-    let query = supabase
+    // Check if coordinador exists
+    const { data: existing } = await supabase
       .from('profiles')
-      .select('id, numero_documento, coordinador_id')
+      .select('id, numero_documento')
       .eq('id', id)
-      .eq('role', 'lider')
+      .eq('role', 'coordinador')
+      .single()
 
-    if (profile.role === 'coordinador') {
-      query = query.eq('coordinador_id', profile.id)
-    }
-
-    const { data: existing, error: existingError } = await query.single()
-
-    if (existingError || !existing) {
+    if (!existing) {
       return NextResponse.json(
-        { error: 'Líder no encontrado' },
+        { error: 'Coordinador no encontrado' },
         { status: 404 }
       )
     }
@@ -106,47 +98,22 @@ export async function PUT(
       }
     }
 
-    // Determine candidato_id: coordinadores mantienen el candidato del coordinador
-    let candidatoId = validatedData.candidato_id?.trim() || null
-    if (profile.role === 'coordinador') {
-      // Coordinadores: mantener el candidato del coordinador
-      candidatoId = profile.candidato_id || null
-    } else if (profile.role === 'admin' && validatedData.coordinador_id?.trim()) {
-      // Si admin asigna un coordinador, heredar su candidato
-      const { data: coordinador } = await supabase
-        .from('profiles')
-        .select('candidato_id')
-        .eq('id', validatedData.coordinador_id.trim())
-        .eq('role', 'coordinador')
-        .single()
-      
-      if (coordinador?.candidato_id && !candidatoId) {
-        candidatoId = coordinador.candidato_id
-      }
-    }
-
     // Update profile
-    const updateData: any = {
-      nombres: validatedData.nombres,
-      apellidos: validatedData.apellidos,
-      tipo_documento: validatedData.tipo_documento,
-      numero_documento: validatedData.numero_documento,
-      fecha_nacimiento: validatedData.fecha_nacimiento || null,
-      telefono: validatedData.telefono || null,
-      departamento: validatedData.departamento || null,
-      municipio: validatedData.municipio || null,
-      zona: validatedData.zona || null,
-      candidato_id: candidatoId,
-    }
-
-    // Solo admins pueden cambiar el coordinador_id
-    if (profile.role === 'admin' && validatedData.coordinador_id !== undefined) {
-      updateData.coordinador_id = validatedData.coordinador_id?.trim() || null
-    }
-
+    const candidatoId = validatedData.candidato_id?.trim() || null
     const { data, error } = await supabase
       .from('profiles')
-      .update(updateData)
+      .update({
+        nombres: validatedData.nombres,
+        apellidos: validatedData.apellidos,
+        tipo_documento: validatedData.tipo_documento,
+        numero_documento: validatedData.numero_documento,
+        fecha_nacimiento: validatedData.fecha_nacimiento || null,
+        telefono: validatedData.telefono || null,
+        departamento: validatedData.departamento || null,
+        municipio: validatedData.municipio || null,
+        zona: validatedData.zona || null,
+        candidato_id: candidatoId,
+      })
       .eq('id', id)
       .select()
       .single()
@@ -179,31 +146,26 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const profile = await requireCoordinadorOrAdmin()
+    await requireAdmin()
     const { id } = await params
     const supabase = await createClient()
 
-    // Check if lider exists and belongs to coordinador if applicable
-    let query = supabase
+    // Check if coordinador exists
+    const { data: existing } = await supabase
       .from('profiles')
       .select('id')
       .eq('id', id)
-      .eq('role', 'lider')
+      .eq('role', 'coordinador')
+      .single()
 
-    if (profile.role === 'coordinador') {
-      query = query.eq('coordinador_id', profile.id)
-    }
-
-    const { data: existing, error: existingError } = await query.single()
-
-    if (existingError || !existing) {
+    if (!existing) {
       return NextResponse.json(
-        { error: 'Líder no encontrado' },
+        { error: 'Coordinador no encontrado' },
         { status: 404 }
       )
     }
 
-    // Check if lider has registered personas
+    // Check if coordinador has registered personas
     const { data: personas } = await supabase
       .from('personas')
       .select('id')
@@ -212,7 +174,21 @@ export async function DELETE(
 
     if (personas && personas.length > 0) {
       return NextResponse.json(
-        { error: 'No se puede eliminar el líder porque tiene personas registradas' },
+        { error: 'No se puede eliminar el coordinador porque tiene personas registradas' },
+        { status: 400 }
+      )
+    }
+
+    // Check if coordinador has leaders
+    const { data: lideres } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('coordinador_id', id)
+      .limit(1)
+
+    if (lideres && lideres.length > 0) {
+      return NextResponse.json(
+        { error: 'No se puede eliminar el coordinador porque tiene líderes asignados' },
         { status: 400 }
       )
     }

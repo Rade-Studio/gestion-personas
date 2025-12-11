@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { requireLiderOrAdmin, getCurrentProfile } from '@/lib/auth/helpers'
+import { requireLiderOrAdmin, getCurrentProfile, requireCoordinadorOrAdmin } from '@/lib/auth/helpers'
 import { personaSchema } from '@/features/personas/validations/persona'
 import {
   isDocumentValidationEnabled,
@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
     const puestoVotacion = searchParams.get('puesto_votacion')
     const numeroDocumento = searchParams.get('numero_documento')
     const liderId = searchParams.get('lider_id')
+    const coordinadorId = searchParams.get('coordinador_id')
     const estado = searchParams.get('estado')
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '10')
@@ -25,14 +26,61 @@ export async function GET(request: NextRequest) {
 
     let query = supabase
       .from('personas')
-      .select('*, voto_confirmaciones(*), profiles!personas_registrado_por_fkey(nombres, apellidos)', {
+      .select('*, voto_confirmaciones(*), profiles!personas_registrado_por_fkey(nombres, apellidos, coordinador_id)', {
         count: 'exact',
       })
 
     // Apply filters based on role
-    // Los líderes pueden ver todas las personas, solo los admins pueden filtrar por líder específico
-    if (profile.role === 'admin' && liderId) {
+    if (profile.role === 'admin' && coordinadorId) {
+      // Admin filtra por coordinador: traer personas del coordinador y sus líderes
+      const { data: lideresDelCoordinador } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('coordinador_id', coordinadorId)
+        .eq('role', 'lider')
+      
+      const liderIds = lideresDelCoordinador?.map(l => l.id) || []
+      liderIds.push(coordinadorId) // Incluir el coordinador mismo
+      
+      if (liderIds.length > 0) {
+        query = query.in('registrado_por', liderIds)
+      } else {
+        // Si no hay líderes, solo mostrar personas del coordinador
+        query = query.eq('registrado_por', coordinadorId)
+      }
+    } else if (profile.role === 'admin' && liderId) {
+      // Admin puede filtrar por cualquier líder
       query = query.eq('registrado_por', liderId)
+    } else if (profile.role === 'coordinador') {
+      // Coordinador solo ve personas de sus líderes y propias
+      // RLS ya filtra esto, pero podemos optimizar con un filtro adicional
+      if (liderId) {
+        // Verificar que el líder pertenece al coordinador
+        const { data: lider } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('id', liderId)
+          .eq('coordinador_id', profile.id)
+          .single()
+        
+        if (lider) {
+          query = query.eq('registrado_por', liderId)
+        } else {
+          // Si el líder no pertenece al coordinador, no mostrar resultados
+          return NextResponse.json({
+            data: [],
+            pagination: {
+              page,
+              limit,
+              total: 0,
+              totalPages: 0,
+            },
+          })
+        }
+      }
+      // Si no hay filtro de líder, RLS mostrará todas las personas del coordinador y sus líderes
+    } else if (profile.role === 'lider') {
+      // Líder solo ve sus propias personas (RLS ya lo maneja)
     }
 
     if (puestoVotacion) {
@@ -129,6 +177,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Líderes, coordinadores y admins pueden crear personas
     const profile = await requireLiderOrAdmin()
     const supabase = await createClient()
 
