@@ -39,7 +39,7 @@ interface MainLayoutProps {
 export function MainLayout({ children }: MainLayoutProps) {
   const router = useRouter()
   const pathname = usePathname()
-  const { profile, signOut, isAdmin } = useAuth()
+  const { profile, signOut, isAdmin, isCoordinador } = useAuth()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
 
   const handleSignOut = async () => {
@@ -121,12 +121,17 @@ export function MainLayout({ children }: MainLayoutProps) {
       { href: '/personas', label: 'Personas', icon: Users },
       ...(isAdmin
         ? [
+            { href: '/coordinadores', label: 'Coordinadores', icon: Building2 },
             { href: '/lideres', label: 'Líderes', icon: UserCog },
             { href: '/candidatos', label: 'Representantes', icon: Award },
           ]
+        : isCoordinador
+        ? [
+            { href: '/lideres', label: 'Líderes', icon: UserCog },
+          ]
         : []),
     ],
-    [isAdmin]
+    [isAdmin, isCoordinador]
   )
 
   return (
@@ -208,7 +213,7 @@ export function MainLayout({ children }: MainLayoutProps) {
                         {profile?.nombres} {profile?.apellidos}
                       </span>
                       <span className="text-xs text-muted-foreground truncate w-full">
-                        {profile?.role === 'admin' ? 'Administrador' : 'Líder'}
+                        {profile?.role === 'admin' ? 'Administrador' : profile?.role === 'coordinador' ? 'Coordinador' : 'Líder'}
                       </span>
                     </div>
                   </SidebarMenuButton>
@@ -220,7 +225,7 @@ export function MainLayout({ children }: MainLayoutProps) {
                         {profile?.nombres} {profile?.apellidos}
                       </p>
                       <p className="text-xs leading-none text-muted-foreground">
-                        {profile?.role === 'admin' ? 'Administrador' : 'Líder'}
+                        {profile?.role === 'admin' ? 'Administrador' : profile?.role === 'coordinador' ? 'Coordinador' : 'Líder'}
                       </p>
                     </div>
                   </DropdownMenuLabel>

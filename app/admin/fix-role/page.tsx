@@ -18,7 +18,7 @@ import { AlertCircle, CheckCircle2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '@/features/auth/hooks/use-auth'
 import { documentoTipos } from '@/features/personas/validations/persona'
-import type { DocumentoTipo } from '@/lib/types'
+import type { DocumentoTipo, UserRole } from '@/lib/types'
 
 export default function FixRolePage() {
   const { profile, loading } = useAuth()
@@ -26,7 +26,7 @@ export default function FixRolePage() {
   const [checking, setChecking] = useState(false)
   const [updating, setUpdating] = useState(false)
   const [formData, setFormData] = useState<{
-    role: 'admin' | 'lider'
+    role: UserRole
     nombres: string
     apellidos: string
     tipo_documento: DocumentoTipo
@@ -177,7 +177,7 @@ export default function FixRolePage() {
               <Select
                 value={formData.role}
                 onValueChange={(value) =>
-                  setFormData({ ...formData, role: value as 'admin' | 'lider' })
+                  setFormData({ ...formData, role: value as UserRole })
                 }
               >
                 <SelectTrigger>
@@ -185,6 +185,7 @@ export default function FixRolePage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="admin">Administrador</SelectItem>
+                  <SelectItem value="coordinador">Coordinador</SelectItem>
                   <SelectItem value="lider">Líder</SelectItem>
                 </SelectContent>
               </Select>

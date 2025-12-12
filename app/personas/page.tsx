@@ -56,6 +56,7 @@ export default function PersonasPage() {
   const [puestosVotacion, setPuestosVotacion] = useState<string[]>([])
   const [mesasVotacion, setMesasVotacion] = useState<string[]>([])
   const [lideres, setLideres] = useState<Array<{ id: string; nombres: string; apellidos: string }>>([])
+  const [coordinadores, setCoordinadores] = useState<Array<{ id: string; nombres: string; apellidos: string }>>([])
   const [stats, setStats] = useState({
     total: 0,
     datosFaltantes: 0,
@@ -144,8 +145,8 @@ export default function PersonasPage() {
         setMesasVotacion(mesas)
       }
 
-      // Cargar líderes si es admin
-      if (profile?.role === 'admin') {
+      // Cargar líderes si es admin o coordinador
+      if (profile?.role === 'admin' || profile?.role === 'coordinador') {
         try {
           const lideresResponse = await fetch('/api/lideres')
           const lideresData = await lideresResponse.json()
@@ -162,8 +163,30 @@ export default function PersonasPage() {
           console.error('Error al cargar líderes:', lideresError)
         }
       } else {
-        // Limpiar líderes si no es admin
+        // Limpiar líderes si no es admin ni coordinador
         setLideres([])
+      }
+
+      // Cargar coordinadores solo si es admin
+      if (profile?.role === 'admin') {
+        try {
+          const coordinadoresResponse = await fetch('/api/coordinadores')
+          const coordinadoresData = await coordinadoresResponse.json()
+          
+          if (!coordinadoresResponse.ok) {
+            console.error('Error al cargar coordinadores:', coordinadoresData.error)
+            return
+          }
+          
+          if (coordinadoresData.data) {
+            setCoordinadores(coordinadoresData.data)
+          }
+        } catch (coordinadoresError) {
+          console.error('Error al cargar coordinadores:', coordinadoresError)
+        }
+      } else {
+        // Limpiar coordinadores si no es admin
+        setCoordinadores([])
       }
     } catch (error) {
       console.error('Error fetching filters:', error)
@@ -664,7 +687,8 @@ export default function PersonasPage() {
           onFilter={setFilters}
           puestosVotacion={puestosVotacion}
           mesasVotacion={[]}
-          lideres={profile?.role === 'admin' ? lideres : undefined}
+          lideres={(profile?.role === 'admin' || profile?.role === 'coordinador') ? lideres : undefined}
+          coordinadores={profile?.role === 'admin' ? coordinadores : undefined}
         />
 
         {/* Table */}

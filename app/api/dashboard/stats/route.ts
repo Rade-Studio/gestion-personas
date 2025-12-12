@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { requireLiderOrAdmin, getCurrentProfile } from '@/lib/auth/helpers'
+import { requireLiderOrAdmin } from '@/lib/auth/helpers'
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,6 +14,18 @@ export async function GET(request: NextRequest) {
     // If lider, only count own personas
     if (profile.role === 'lider') {
       personasQuery = personasQuery.eq('registrado_por', profile.id)
+    } else if (profile.role === 'coordinador') {
+      // Coordinadores see personas from their leaders and own
+      const { data: lideres } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('coordinador_id', profile.id)
+        .eq('role', 'lider')
+      
+      const liderIds = lideres?.map(l => l.id) || []
+      liderIds.push(profile.id) // Include coordinador's own personas
+      
+      personasQuery = personasQuery.in('registrado_por', liderIds)
     }
 
     const { count: totalPersonas } = await personasQuery
@@ -30,6 +42,34 @@ export async function GET(request: NextRequest) {
         .from('personas')
         .select('id')
         .eq('registrado_por', profile.id)
+
+      if (personaIds && personaIds.length > 0) {
+        confirmedCountQuery = confirmedCountQuery.in(
+          'persona_id',
+          personaIds.map((p) => p.id)
+        )
+      } else {
+        return NextResponse.json({
+          total_registradas: 0,
+          total_confirmadas: 0,
+          total_no_confirmadas: 0,
+        })
+      }
+    } else if (profile.role === 'coordinador') {
+      // Get persona IDs for coordinador's leaders and own
+      const { data: lideres } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('coordinador_id', profile.id)
+        .eq('role', 'lider')
+      
+      const liderIds = lideres?.map(l => l.id) || []
+      liderIds.push(profile.id) // Include coordinador's own personas
+      
+      const { data: personaIds } = await supabase
+        .from('personas')
+        .select('id')
+        .in('registrado_por', liderIds)
 
       if (personaIds && personaIds.length > 0) {
         confirmedCountQuery = confirmedCountQuery.in(

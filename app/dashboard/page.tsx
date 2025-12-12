@@ -20,8 +20,20 @@ interface DashboardStats {
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(true)
-  const { isAdmin } = useAuth()
+  const { isAdmin, isCoordinador, isLider, profile } = useAuth()
   const enableAdminCharts = process.env.NEXT_PUBLIC_ENABLE_ADMIN_CHARTS === 'true'
+
+  // Obtener descripción según el rol
+  const getDashboardDescription = () => {
+    if (isAdmin) {
+      return 'Resumen general del sistema de gestión de personas'
+    } else if (isCoordinador) {
+      return 'Resumen de tus datos y los datos de tus líderes asignados'
+    } else if (isLider) {
+      return 'Resumen de tus datos registrados'
+    }
+    return 'Resumen general del sistema de gestión de personas'
+  }
 
   const fetchStats = async () => {
     setLoading(true)
@@ -58,7 +70,7 @@ export default function DashboardPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
           <p className="text-muted-foreground mt-1.5">
-            Resumen general del sistema de gestión de personas
+            {getDashboardDescription()}
           </p>
         </div>
 
@@ -81,7 +93,11 @@ export default function DashboardPage() {
                     {total.toLocaleString()}
                   </div>
                   <CardDescription className="text-xs">
-                    Total de personas en el sistema
+                    {isAdmin 
+                      ? 'Total de personas en el sistema'
+                      : isCoordinador
+                      ? 'Total de personas registradas por ti y tus líderes'
+                      : 'Total de personas registradas por ti'}
                   </CardDescription>
                 </>
               )}

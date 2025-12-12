@@ -43,9 +43,11 @@ import {
 import { toast } from 'sonner'
 import { LiderForm } from '@/features/lideres/components/lider-form'
 import { type LiderFormData } from '@/features/lideres/validations/lider'
+import { useAuth } from '@/features/auth/hooks/use-auth'
 import type { Profile } from '@/lib/types'
 
 export default function LideresPage() {
+  const { isAdmin, isCoordinador } = useAuth()
   const [lideres, setLideres] = useState<Profile[]>([])
   const [loading, setLoading] = useState(true)
   const [formOpen, setFormOpen] = useState(false)
@@ -145,22 +147,30 @@ export default function LideresPage() {
     }
   }
 
+  // Verificar que el usuario tenga permisos antes de renderizar
+  if (!isAdmin && !isCoordinador) {
+    return null
+  }
+
   return (
-    <RequireAuth requireAdmin>
-      <MainLayout>
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight">Gestión de Líderes</h1>
-              <p className="text-muted-foreground mt-1.5">
-                Administra los líderes del sistema
-              </p>
-            </div>
+    <MainLayout>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Líderes</h1>
+            <p className="text-muted-foreground mt-1.5">
+              {isCoordinador 
+                ? 'Administra los líderes asignados a tu coordinación'
+                : 'Administra los líderes del sistema'}
+            </p>
+          </div>
+          {(isAdmin || isCoordinador) && (
             <Button onClick={handleCreate}>
               <Plus className="mr-2 h-4 w-4" />
               Nuevo Líder
             </Button>
-          </div>
+          )}
+        </div>
 
           <Card>
             <Table>
@@ -295,7 +305,6 @@ export default function LideresPage() {
           </AlertDialogContent>
         </AlertDialog>
       </MainLayout>
-    </RequireAuth>
   )
 }
 
