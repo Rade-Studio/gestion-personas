@@ -23,7 +23,7 @@ interface PersonasFiltersProps {
     coordinador_id?: string
     estado?: string
   }) => void
-  puestosVotacion: string[]
+  puestosVotacion: Array<{ id: number; codigo: string; nombre: string }>
   mesasVotacion: string[]
   lideres?: Array<{ id: string; nombres: string; apellidos: string }>
   coordinadores?: Array<{ id: string; nombres: string; apellidos: string }>
@@ -60,7 +60,7 @@ export function PersonasFilters({
   // Apply filters function
   const applyFilters = useCallback(() => {
     const activeFilters: any = {}
-    if (filters.puesto_votacion) {
+    if (filters.puesto_votacion && filters.puesto_votacion !== 'all') {
       activeFilters.puesto_votacion = filters.puesto_votacion
     }
     if (filters.numero_documento.trim()) {
@@ -188,18 +188,20 @@ export function PersonasFilters({
                     if (!p) return false
                     if (!puestoSearch.trim()) return true
                     const searchLower = puestoSearch.toLowerCase()
-                    return p.toLowerCase().includes(searchLower)
+                    return p.nombre.toLowerCase().includes(searchLower) || 
+                           p.codigo.toLowerCase().includes(searchLower)
                   })
                   .map((puesto) => (
-                    <SelectItem key={puesto} value={puesto}>
-                      {puesto}
+                    <SelectItem key={puesto.id} value={puesto.id.toString()}>
+                      {puesto.nombre}
                     </SelectItem>
                   ))}
                 {puestosVotacion.filter((p) => {
                   if (!p) return false
                   if (!puestoSearch.trim()) return false
                   const searchLower = puestoSearch.toLowerCase()
-                  return p.toLowerCase().includes(searchLower)
+                  return p.nombre.toLowerCase().includes(searchLower) || 
+                         p.codigo.toLowerCase().includes(searchLower)
                 }).length === 0 && puestoSearch.trim() && (
                   <div className="px-2 py-1.5 text-sm text-muted-foreground text-center">
                     No se encontraron puestos

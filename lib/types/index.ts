@@ -31,10 +31,12 @@ export interface Persona {
   edad?: number
   numero_celular?: string
   direccion?: string
-  barrio?: string
+  barrio_id?: number
+  barrio?: Barrio
   departamento?: string
   municipio?: string
-  puesto_votacion?: string
+  puesto_votacion_id?: number
+  puesto_votacion?: PuestoVotacion
   mesa_votacion?: string
   registrado_por: string
   es_importado: boolean
@@ -82,5 +84,18 @@ export interface Candidato {
   es_por_defecto: boolean
   created_at: string
   updated_at: string
+}
+
+export interface Barrio {
+  id: number
+  codigo: string
+  nombre: string
+}
+
+export interface PuestoVotacion {
+  id: number
+  codigo: string
+  nombre: string
+  direccion?: string
 }
 

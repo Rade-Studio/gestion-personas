@@ -71,10 +71,12 @@ export const personaSchema = z.object({
   profesion: z.string().optional().or(z.literal('')),
   numero_celular: z.string().optional().or(z.literal('')),
   direccion: z.string().optional().or(z.literal('')),
-  barrio: z.string().optional().or(z.literal('')),
+  barrio_id: z.number().int().positive().optional().or(z.null()),
+  barrio: z.string().optional().or(z.literal('')), // Mantener para compatibilidad
   departamento: z.string().optional().or(z.literal('')),
   municipio: z.string().optional().or(z.literal('')),
-  puesto_votacion: z.string().optional().or(z.literal('')),
+  puesto_votacion_id: z.number().int().positive().optional().or(z.null()),
+  puesto_votacion: z.string().optional().or(z.literal('')), // Mantener para compatibilidad
   mesa_votacion: z.string().optional().or(z.literal('')),
 })
 

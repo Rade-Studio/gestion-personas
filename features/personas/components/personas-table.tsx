@@ -159,7 +159,7 @@ export function PersonasTable({
                       <span className="text-sm">{persona.municipio || '-'}</span>
                     </TableCell>
                     <TableCell className="py-4">
-                      <span className="text-sm">{persona.puesto_votacion || '-'}</span>
+                      <span className="text-sm">{persona.puesto_votacion?.nombre || persona.puesto_votacion || '-'}</span>
                     </TableCell>
                     <TableCell className="py-4">
                       <span className="text-sm">{persona.mesa_votacion || '-'}</span>

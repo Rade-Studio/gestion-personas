@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { personaSchema, documentoTipos, type PersonaFormData } from '@/features/personas/validations/persona'
@@ -24,7 +24,8 @@ import {
 } from '@/components/ui/dialog'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Loader2 } from 'lucide-react'
-import type { Persona } from '@/lib/types'
+import { Skeleton } from '@/components/ui/skeleton'
+import type { Persona, Barrio, PuestoVotacion } from '@/lib/types'
 
 interface PersonaFormProps {
   open: boolean
@@ -41,6 +42,12 @@ export function PersonaForm({
   initialData,
   loading = false,
 }: PersonaFormProps) {
+  const [barrios, setBarrios] = useState<Barrio[]>([])
+  const [puestosVotacion, setPuestosVotacion] = useState<PuestoVotacion[]>([])
+  const [loadingBarrios, setLoadingBarrios] = useState(false)
+  const [loadingPuestos, setLoadingPuestos] = useState(false)
+  const [isDataLoaded, setIsDataLoaded] = useState(false)
+
   const form = useForm<PersonaFormData>({
     resolver: zodResolver(personaSchema),
     defaultValues: {
@@ -53,17 +60,65 @@ export function PersonaForm({
       profesion: '',
       numero_celular: '',
       direccion: '',
+      barrio_id: undefined,
       barrio: '',
       departamento: '',
       municipio: '',
+      puesto_votacion_id: undefined,
       puesto_votacion: '',
       mesa_votacion: '',
     },
   })
 
+  // Cargar barrios y puestos de votación cuando se abre el diálogo
+  useEffect(() => {
+    if (open) {
+      setIsDataLoaded(false)
+      const fetchBarrios = async () => {
+        setLoadingBarrios(true)
+        try {
+          const response = await fetch('/api/barrios')
+          const data = await response.json()
+          if (response.ok) {
+            setBarrios(data.data || [])
+          }
+        } catch (error) {
+          // Silently fail
+        } finally {
+          setLoadingBarrios(false)
+        }
+      }
+
+      const fetchPuestos = async () => {
+        setLoadingPuestos(true)
+        try {
+          const response = await fetch('/api/puestos-votacion')
+          const data = await response.json()
+          if (response.ok) {
+            setPuestosVotacion(data.data || [])
+          }
+        } catch (error) {
+          // Silently fail
+        } finally {
+          setLoadingPuestos(false)
+        }
+      }
+
+      Promise.all([fetchBarrios(), fetchPuestos()]).then(() => {
+        setIsDataLoaded(true)
+      })
+    } else {
+      setIsDataLoaded(false)
+    }
+  }, [open])
+
   // Update form values when initialData changes
   useEffect(() => {
     if (initialData) {
+      // Extraer IDs de las relaciones si vienen como objetos
+      const barrioId = initialData.barrio_id || (initialData.barrio as any)?.id || undefined
+      const puestoVotacionId = initialData.puesto_votacion_id || (initialData.puesto_votacion as any)?.id || undefined
+      
       form.reset({
         nombres: initialData.nombres || '',
         apellidos: initialData.apellidos || '',
@@ -74,10 +129,12 @@ export function PersonaForm({
         profesion: initialData.profesion || '',
         numero_celular: initialData.numero_celular || '',
         direccion: initialData.direccion || '',
-        barrio: initialData.barrio || '',
+        barrio_id: barrioId,
+        barrio: typeof initialData.barrio === 'string' ? initialData.barrio : (initialData.barrio as any)?.nombre || '',
         departamento: initialData.departamento || '',
         municipio: initialData.municipio || '',
-        puesto_votacion: initialData.puesto_votacion || '',
+        puesto_votacion_id: puestoVotacionId,
+        puesto_votacion: typeof initialData.puesto_votacion === 'string' ? initialData.puesto_votacion : (initialData.puesto_votacion as any)?.nombre || '',
         mesa_votacion: initialData.mesa_votacion || '',
       })
     } else {
@@ -91,9 +148,11 @@ export function PersonaForm({
         profesion: '',
         numero_celular: '',
         direccion: '',
+        barrio_id: undefined,
         barrio: '',
         departamento: '',
         municipio: '',
+        puesto_votacion_id: undefined,
         puesto_votacion: '',
         mesa_votacion: '',
       })
@@ -122,9 +181,12 @@ export function PersonaForm({
     if (!isOpen) {
       // Solo resetear cuando se cierra el diálogo
       form.reset()
+      setIsDataLoaded(false)
     }
     onOpenChange(isOpen)
   }
+
+  const isLoading = loadingBarrios || loadingPuestos || !isDataLoaded
 
   return (
     <Dialog open={open} onOpenChange={handleDialogChange}>
@@ -139,7 +201,27 @@ export function PersonaForm({
               : 'Completa los datos para registrar una nueva persona'}
           </DialogDescription>
         </DialogHeader>
-        <Form {...form}>
+        {isLoading ? (
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              <span className="ml-2 text-sm text-muted-foreground">Cargando datos...</span>
+            </div>
+          </div>
+        ) : (
+          <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <FormField
@@ -179,7 +261,7 @@ export function PersonaForm({
                     <FormLabel>Tipo de Documento *</FormLabel>
                     <Select
                       onValueChange={field.onChange}
-                      defaultValue={field.value}
+                      value={field.value}
                       disabled={loading}
                     >
                       <FormControl>
@@ -289,13 +371,38 @@ export function PersonaForm({
 
             <FormField
               control={form.control}
-              name="barrio"
+              name="barrio_id"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Barrio</FormLabel>
-                  <FormControl>
-                    <Input {...field} disabled={loading} />
-                  </FormControl>
+                  <Select
+                    value={field.value != null ? field.value.toString() : 'none'}
+                    onValueChange={(value) => field.onChange(value === 'none' ? null : parseInt(value))}
+                    disabled={loading || loadingBarrios}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder={loadingBarrios ? 'Cargando...' : 'Seleccionar barrio'} />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="none">Sin barrio</SelectItem>
+                      {barrios && barrios.length > 0
+                        ? barrios
+                            .filter((barrio) => barrio?.id != null && barrio.id !== undefined)
+                            .map((barrio) => {
+                              const idStr = String(barrio.id)
+                              if (!idStr || idStr.trim() === '') return null
+                              return (
+                            <SelectItem key={barrio.id} value={idStr}>
+                              {barrio.nombre}
+                            </SelectItem>
+                              )
+                            })
+                            .filter(Boolean)
+                        : null}
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}
@@ -333,13 +440,38 @@ export function PersonaForm({
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
-                name="puesto_votacion"
+                name="puesto_votacion_id"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Puesto de Votación</FormLabel>
-                    <FormControl>
-                      <Input {...field} disabled={loading} />
-                    </FormControl>
+                    <Select
+                      value={field.value != null ? field.value.toString() : 'none'}
+                      onValueChange={(value) => field.onChange(value === 'none' ? null : parseInt(value))}
+                      disabled={loading || loadingPuestos}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder={loadingPuestos ? 'Cargando...' : 'Seleccionar puesto'} />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="none">Sin puesto</SelectItem>
+                        {puestosVotacion && puestosVotacion.length > 0
+                          ? puestosVotacion
+                              .filter((puesto) => puesto?.id != null && puesto.id !== undefined)
+                              .map((puesto) => {
+                                const idStr = String(puesto.id)
+                                if (!idStr || idStr.trim() === '') return null
+                                return (
+                              <SelectItem key={puesto.id} value={idStr}>
+                                {puesto.nombre}
+                              </SelectItem>
+                                )
+                              })
+                              .filter(Boolean)
+                          : null}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -381,6 +513,7 @@ export function PersonaForm({
             </DialogFooter>
           </form>
         </Form>
+        )}
       </DialogContent>
     </Dialog>
   )

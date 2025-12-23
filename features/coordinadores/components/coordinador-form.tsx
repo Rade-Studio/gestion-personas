@@ -23,13 +23,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import type { Profile, Candidato } from '@/lib/types'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Loader2 } from 'lucide-react'
+import type { Profile, Candidato, Barrio, PuestoVotacion } from '@/lib/types'
 
 interface CoordinadorFormProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onSubmit: (data: CoordinadorFormData) => Promise<void>
   initialData?: Profile
+  loading?: boolean
 }
 
 export function CoordinadorForm({
@@ -37,9 +40,15 @@ export function CoordinadorForm({
   onOpenChange,
   onSubmit,
   initialData,
+  loading = false,
 }: CoordinadorFormProps) {
   const [candidatos, setCandidatos] = useState<Candidato[]>([])
   const [loadingCandidatos, setLoadingCandidatos] = useState(false)
+  const [barrios, setBarrios] = useState<Barrio[]>([])
+  const [puestosVotacion, setPuestosVotacion] = useState<PuestoVotacion[]>([])
+  const [loadingBarrios, setLoadingBarrios] = useState(false)
+  const [loadingPuestos, setLoadingPuestos] = useState(false)
+  const [isDataLoaded, setIsDataLoaded] = useState(false)
 
   const form = useForm<CoordinadorFormData>({
     resolver: zodResolver(coordinadorSchema),
@@ -53,6 +62,8 @@ export function CoordinadorForm({
       departamento: '',
       municipio: '',
       zona: '',
+      barrio_id: undefined,
+      puesto_votacion_id: undefined,
       candidato_id: '',
       password: '',
       email: '',
@@ -85,7 +96,46 @@ export function CoordinadorForm({
           setLoadingCandidatos(false)
         }
       }
-      fetchCandidatos()
+
+      const fetchBarrios = async () => {
+        setLoadingBarrios(true)
+        try {
+          const response = await fetch('/api/barrios')
+          const data = await response.json()
+          if (response.ok) {
+            setBarrios(data.data || [])
+          }
+        } catch (error) {
+          // Silently fail
+        } finally {
+          setLoadingBarrios(false)
+        }
+      }
+
+      const fetchPuestos = async () => {
+        setLoadingPuestos(true)
+        try {
+          const response = await fetch('/api/puestos-votacion')
+          const data = await response.json()
+          if (response.ok) {
+            setPuestosVotacion(data.data || [])
+          }
+        } catch (error) {
+          // Silently fail
+        } finally {
+          setLoadingPuestos(false)
+        }
+      }
+
+      Promise.all([
+        fetchCandidatos(),
+        fetchBarrios(),
+        fetchPuestos(),
+      ]).then(() => {
+        setIsDataLoaded(true)
+      })
+    } else {
+      setIsDataLoaded(false)
     }
   }, [open, initialData, form])
 
@@ -101,6 +151,8 @@ export function CoordinadorForm({
         departamento: initialData.departamento || '',
         municipio: initialData.municipio || '',
         zona: initialData.zona || '',
+        barrio_id: undefined,
+        puesto_votacion_id: undefined,
         candidato_id: initialData.candidato_id || '',
         password: '',
         email: '',
@@ -116,6 +168,8 @@ export function CoordinadorForm({
         departamento: '',
         municipio: '',
         zona: '',
+        barrio_id: undefined,
+        puesto_votacion_id: undefined,
         candidato_id: '',
         password: '',
         email: '',
@@ -127,14 +181,24 @@ export function CoordinadorForm({
     try {
       await onSubmit(data)
       form.reset()
+      setIsDataLoaded(false)
       onOpenChange(false)
     } catch (error) {
       // Error handling is done in parent component
     }
   }
 
+  const handleDialogChange = (isOpen: boolean) => {
+    if (!isOpen) {
+      setIsDataLoaded(false)
+    }
+    onOpenChange(isOpen)
+  }
+
+  const isLoading = loadingBarrios || loadingPuestos || loadingCandidatos || !isDataLoaded
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleDialogChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
@@ -146,13 +210,34 @@ export function CoordinadorForm({
               : 'Completa los datos para crear un nuevo coordinador'}
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+        {isLoading ? (
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              <span className="ml-2 text-sm text-muted-foreground">Cargando datos...</span>
+            </div>
+          </div>
+        ) : (
+          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="nombres">Nombres *</Label>
               <Input
                 id="nombres"
                 {...form.register('nombres')}
+                disabled={loading}
               />
               {form.formState.errors.nombres && (
                 <p className="text-sm text-destructive">
@@ -165,6 +250,7 @@ export function CoordinadorForm({
               <Input
                 id="apellidos"
                 {...form.register('apellidos')}
+                disabled={loading}
               />
               {form.formState.errors.apellidos && (
                 <p className="text-sm text-destructive">
@@ -180,6 +266,7 @@ export function CoordinadorForm({
               <Select
                 value={form.watch('tipo_documento')}
                 onValueChange={(value) => form.setValue('tipo_documento', value as any)}
+                disabled={loading}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -198,6 +285,7 @@ export function CoordinadorForm({
               <Input
                 id="numero_documento"
                 {...form.register('numero_documento')}
+                disabled={loading}
               />
               {form.formState.errors.numero_documento && (
                 <p className="text-sm text-destructive">
@@ -214,6 +302,7 @@ export function CoordinadorForm({
                 id="fecha_nacimiento"
                 type="date"
                 {...form.register('fecha_nacimiento')}
+                disabled={loading}
               />
             </div>
             <div className="space-y-2">
@@ -231,6 +320,7 @@ export function CoordinadorForm({
               <Input
                 id="departamento"
                 {...form.register('departamento')}
+                disabled={loading}
               />
             </div>
             <div className="space-y-2">
@@ -245,7 +335,69 @@ export function CoordinadorForm({
               <Input
                 id="zona"
                 {...form.register('zona')}
+                disabled={loading}
               />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="barrio_id">Barrio</Label>
+              <Select
+                value={form.watch('barrio_id') != null ? form.watch('barrio_id')!.toString() : 'none'}
+                onValueChange={(value) => form.setValue('barrio_id', value === 'none' ? null : parseInt(value))}
+                disabled={loading || loadingBarrios}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={loadingBarrios ? 'Cargando...' : 'Seleccionar barrio'} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sin barrio</SelectItem>
+                  {barrios && barrios.length > 0
+                    ? barrios
+                        .filter((barrio) => barrio?.id != null && barrio.id !== undefined)
+                        .map((barrio) => {
+                          const idStr = String(barrio.id)
+                          if (!idStr || idStr.trim() === '') return null
+                          return (
+                            <SelectItem key={barrio.id} value={idStr}>
+                              {barrio.nombre}
+                            </SelectItem>
+                          )
+                        })
+                        .filter(Boolean)
+                    : null}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="puesto_votacion_id">Puesto de Votación</Label>
+              <Select
+                value={form.watch('puesto_votacion_id') != null ? form.watch('puesto_votacion_id')!.toString() : 'none'}
+                onValueChange={(value) => form.setValue('puesto_votacion_id', value === 'none' ? null : parseInt(value))}
+                disabled={loading || loadingPuestos}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={loadingPuestos ? 'Cargando...' : 'Seleccionar puesto'} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sin puesto</SelectItem>
+                  {puestosVotacion && puestosVotacion.length > 0
+                    ? puestosVotacion
+                        .filter((puesto) => puesto?.id != null && puesto.id !== undefined)
+                        .map((puesto) => {
+                          const idStr = String(puesto.id)
+                          if (!idStr || idStr.trim() === '') return null
+                          return (
+                            <SelectItem key={puesto.id} value={idStr}>
+                              {puesto.nombre}
+                            </SelectItem>
+                          )
+                        })
+                        .filter(Boolean)
+                    : null}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
@@ -254,7 +406,7 @@ export function CoordinadorForm({
             <Select
               value={form.watch('candidato_id') || 'none'}
               onValueChange={(value) => form.setValue('candidato_id', value === 'none' ? '' : value)}
-              disabled={loadingCandidatos}
+              disabled={loading || loadingCandidatos}
             >
               <SelectTrigger>
                 <SelectValue placeholder={loadingCandidatos ? 'Cargando...' : 'Seleccionar representante'} />
@@ -282,6 +434,7 @@ export function CoordinadorForm({
                   id="email"
                   type="email"
                   {...form.register('email')}
+                  disabled={loading}
                 />
                 <p className="text-xs text-muted-foreground">
                   Si no se proporciona, se generará automáticamente
@@ -293,6 +446,7 @@ export function CoordinadorForm({
                   id="password"
                   type="password"
                   {...form.register('password')}
+                  disabled={loading}
                 />
                 <p className="text-xs text-muted-foreground">
                   Si no se proporciona, se generará automáticamente
@@ -308,6 +462,7 @@ export function CoordinadorForm({
                 id="password"
                 type="password"
                 {...form.register('password')}
+                disabled={loading}
               />
               <p className="text-xs text-muted-foreground">
                 Deje vacío para mantener la contraseña actual
@@ -319,15 +474,24 @@ export function CoordinadorForm({
             <Button
               type="button"
               variant="outline"
-              onClick={() => onOpenChange(false)}
+              onClick={() => handleDialogChange(false)}
+              disabled={loading}
             >
               Cancelar
             </Button>
-            <Button type="submit">
-              {initialData ? 'Actualizar' : 'Crear'}
+            <Button type="submit" disabled={loading}>
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {initialData ? 'Actualizando...' : 'Creando...'}
+                </>
+              ) : (
+                initialData ? 'Actualizar' : 'Crear'
+              )}
             </Button>
           </DialogFooter>
         </form>
+        )}
       </DialogContent>
     </Dialog>
   )

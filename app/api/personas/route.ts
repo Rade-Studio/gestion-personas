@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
 
     let query = supabase
       .from('personas')
-      .select('*, voto_confirmaciones(*), profiles!personas_registrado_por_fkey(nombres, apellidos, coordinador_id)', {
+      .select('*, voto_confirmaciones(*), profiles!personas_registrado_por_fkey(nombres, apellidos, coordinador_id), barrios(id, codigo, nombre), puestos_votacion(id, codigo, nombre, direccion)', {
         count: 'exact',
       })
 
@@ -84,7 +84,21 @@ export async function GET(request: NextRequest) {
     }
 
     if (puestoVotacion) {
-      query = query.eq('puesto_votacion', puestoVotacion)
+      // Puede ser código o ID, intentar ambos
+      const puestoId = parseInt(puestoVotacion)
+      if (!isNaN(puestoId)) {
+        query = query.eq('puesto_votacion_id', puestoId)
+      } else {
+        // Si es código, buscar el ID primero
+        const { data: puesto } = await supabase
+          .from('puestos_votacion')
+          .select('id')
+          .eq('codigo', puestoVotacion)
+          .single()
+        if (puesto) {
+          query = query.eq('puesto_votacion_id', puesto.id)
+        }
+      }
     }
 
     if (numeroDocumento) {
@@ -122,9 +136,10 @@ export async function GET(request: NextRequest) {
           new Date(b.confirmado_at).getTime() - new Date(a.confirmado_at).getTime()
         )[0]
 
-      const { voto_confirmaciones, ...personaData } = persona
+      const { voto_confirmaciones, puestos_votacion, ...personaData } = persona
       return {
         ...personaData,
+        puesto_votacion: puestos_votacion || persona.puesto_votacion,
         confirmacion: confirmacion || undefined,
       }
     })
@@ -134,22 +149,25 @@ export async function GET(request: NextRequest) {
     
     if (estado === 'missing_data') {
       transformedData = transformedData.filter((persona: any) => {
-        const faltaPuestoOMesa = !persona.puesto_votacion || !persona.mesa_votacion
+        const puestoVotacion = persona.puesto_votacion?.nombre || persona.puesto_votacion
+        const faltaPuestoOMesa = !puestoVotacion || !persona.mesa_votacion
         const faltaFechaExpedicion = fechaExpedicionRequired && !persona.fecha_expedicion
         return faltaPuestoOMesa || faltaFechaExpedicion
       })
     } else if (estado === 'confirmed') {
-      transformedData = transformedData.filter((persona: any) => 
-        persona.puesto_votacion && persona.mesa_votacion && 
+      transformedData = transformedData.filter((persona: any) => {
+        const puestoVotacion = persona.puesto_votacion?.nombre || persona.puesto_votacion
+        return puestoVotacion && persona.mesa_votacion && 
         (!fechaExpedicionRequired || persona.fecha_expedicion) &&
         persona.confirmacion && !persona.confirmacion.reversado
-      )
+      })
     } else if (estado === 'pending') {
-      transformedData = transformedData.filter((persona: any) => 
-        persona.puesto_votacion && persona.mesa_votacion &&
+      transformedData = transformedData.filter((persona: any) => {
+        const puestoVotacion = persona.puesto_votacion?.nombre || persona.puesto_votacion
+        return puestoVotacion && persona.mesa_votacion &&
         (!fechaExpedicionRequired || persona.fecha_expedicion) &&
         (!persona.confirmacion || persona.confirmacion.reversado)
-      )
+      })
     }
 
     // Apply pagination if we filtered in memory
@@ -226,21 +244,24 @@ export async function POST(request: NextRequest) {
     const { data, error } = await supabase
       .from('personas')
       .insert({
-        ...validatedData,
+        nombres: validatedData.nombres,
+        apellidos: validatedData.apellidos,
+        tipo_documento: validatedData.tipo_documento,
+        numero_documento: validatedData.numero_documento,
         fecha_nacimiento: validatedData.fecha_nacimiento || null,
         fecha_expedicion: validatedData.fecha_expedicion || null,
         profesion: validatedData.profesion || null,
         numero_celular: validatedData.numero_celular || null,
         direccion: validatedData.direccion || null,
-        barrio: validatedData.barrio || null,
+        barrio_id: validatedData.barrio_id || null,
         departamento: validatedData.departamento || null,
         municipio: validatedData.municipio || null,
-        puesto_votacion: validatedData.puesto_votacion || null,
+        puesto_votacion_id: validatedData.puesto_votacion_id || null,
         mesa_votacion: validatedData.mesa_votacion || null,
         registrado_por: profile.id,
         es_importado: false,
       })
-      .select()
+      .select('*, barrios(id, codigo, nombre), puestos_votacion(id, codigo, nombre, direccion)')
       .single()
 
     if (error) {

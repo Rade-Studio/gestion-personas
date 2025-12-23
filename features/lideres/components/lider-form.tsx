@@ -24,6 +24,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { useAuth } from '@/features/auth/hooks/use-auth'
+import { Loader2 } from 'lucide-react'
 import type { Profile, Candidato } from '@/lib/types'
 
 interface LiderFormProps {
@@ -38,6 +39,7 @@ export function LiderForm({
   onOpenChange,
   onSubmit,
   initialData,
+  loading = false,
 }: LiderFormProps) {
   const { profile: currentProfile, isCoordinador, isAdmin } = useAuth()
   const [candidatos, setCandidatos] = useState<Candidato[]>([])
@@ -158,6 +160,7 @@ export function LiderForm({
       onOpenChange(false)
     } catch (error) {
       // Error handling is done in parent component
+      // No resetear el formulario si hay error - mantener los datos para corrección
     }
   }
 
@@ -181,6 +184,7 @@ export function LiderForm({
               <Input
                 id="nombres"
                 {...form.register('nombres')}
+                disabled={loading}
               />
               {form.formState.errors.nombres && (
                 <p className="text-sm text-destructive">
@@ -193,6 +197,7 @@ export function LiderForm({
               <Input
                 id="apellidos"
                 {...form.register('apellidos')}
+                disabled={loading}
               />
               {form.formState.errors.apellidos && (
                 <p className="text-sm text-destructive">
@@ -208,6 +213,7 @@ export function LiderForm({
               <Select
                 value={form.watch('tipo_documento')}
                 onValueChange={(value) => form.setValue('tipo_documento', value as any)}
+                disabled={loading}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -242,6 +248,7 @@ export function LiderForm({
                 id="fecha_nacimiento"
                 type="date"
                 {...form.register('fecha_nacimiento')}
+                disabled={loading}
               />
             </div>
             <div className="space-y-2">
@@ -259,6 +266,7 @@ export function LiderForm({
               <Input
                 id="departamento"
                 {...form.register('departamento')}
+                disabled={loading}
               />
             </div>
             <div className="space-y-2">
@@ -266,6 +274,7 @@ export function LiderForm({
               <Input
                 id="municipio"
                 {...form.register('municipio')}
+                disabled={loading}
               />
             </div>
             <div className="space-y-2">
@@ -273,6 +282,7 @@ export function LiderForm({
               <Input
                 id="zona"
                 {...form.register('zona')}
+                disabled={loading}
               />
             </div>
           </div>
@@ -298,7 +308,7 @@ export function LiderForm({
                 <Select
                   value={form.watch('coordinador_id') || 'none'}
                   onValueChange={(value) => form.setValue('coordinador_id', value === 'none' ? '' : value)}
-                  disabled={loadingCoordinadores}
+                  disabled={loading || loadingCoordinadores}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder={loadingCoordinadores ? 'Cargando...' : 'Seleccionar coordinador'} />
@@ -322,7 +332,7 @@ export function LiderForm({
                 <Select
                   value={form.watch('candidato_id') || 'none'}
                   onValueChange={(value) => form.setValue('candidato_id', value === 'none' ? '' : value)}
-                  disabled={loadingCandidatos}
+                  disabled={loading || loadingCandidatos}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder={loadingCandidatos ? 'Cargando...' : 'Seleccionar representante'} />
@@ -352,6 +362,7 @@ export function LiderForm({
                   id="email"
                   type="email"
                   {...form.register('email')}
+                  disabled={loading}
                 />
                 <p className="text-xs text-muted-foreground">
                   Si no se proporciona, se generará automáticamente
@@ -363,6 +374,7 @@ export function LiderForm({
                   id="password"
                   type="password"
                   {...form.register('password')}
+                  disabled={loading}
                 />
                 <p className="text-xs text-muted-foreground">
                   Si no se proporciona, se generará automáticamente
@@ -378,6 +390,7 @@ export function LiderForm({
                 id="password"
                 type="password"
                 {...form.register('password')}
+                disabled={loading}
               />
               <p className="text-xs text-muted-foreground">
                 Deje vacío para mantener la contraseña actual
@@ -390,11 +403,19 @@ export function LiderForm({
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
+              disabled={loading}
             >
               Cancelar
             </Button>
-            <Button type="submit">
-              {initialData ? 'Actualizar' : 'Crear'}
+            <Button type="submit" disabled={loading}>
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {initialData ? 'Actualizando...' : 'Creando...'}
+                </>
+              ) : (
+                initialData ? 'Actualizar' : 'Crear'
+              )}
             </Button>
           </DialogFooter>
         </form>

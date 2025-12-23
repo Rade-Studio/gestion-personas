@@ -50,6 +50,7 @@ export default function LideresPage() {
   const { isAdmin, isCoordinador } = useAuth()
   const [lideres, setLideres] = useState<Profile[]>([])
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [formOpen, setFormOpen] = useState(false)
   const [editingLider, setEditingLider] = useState<Profile | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -89,6 +90,7 @@ export default function LideresPage() {
   }
 
   const handleSubmit = async (data: LiderFormData) => {
+    setSaving(true)
     try {
       const url = editingLider
         ? `/api/lideres/${editingLider.id}`
@@ -117,6 +119,9 @@ export default function LideresPage() {
       }
     } catch (error: any) {
       toast.error(error.message)
+      throw error
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -245,9 +250,17 @@ export default function LideresPage() {
 
         <LiderForm
           open={formOpen}
-          onOpenChange={setFormOpen}
+          onOpenChange={(open) => {
+            if (!saving) {
+              setFormOpen(open)
+              if (!open) {
+                setEditingLider(null)
+              }
+            }
+          }}
           onSubmit={handleSubmit}
           initialData={editingLider || undefined}
+          loading={saving}
         />
 
         <Dialog open={!!credentials} onOpenChange={() => setCredentials(null)}>
