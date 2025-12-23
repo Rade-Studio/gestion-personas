@@ -25,7 +25,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import type { PersonaWithConfirmacion } from '@/lib/types'
+import type { PersonaWithConfirmacion, PuestoVotacion } from '@/lib/types'
 import { getPersonaEstado } from '@/features/personas/utils/persona-estado'
 import Image from 'next/image'
 import { AlertCircle } from 'lucide-react'
@@ -37,6 +37,12 @@ interface PersonasTableProps {
   onConfirmVoto: (persona: PersonaWithConfirmacion) => void
   onReversarVoto: (persona: PersonaWithConfirmacion) => void
   loading?: boolean
+}
+
+const getPuestoVotacionNombre = (puesto: string | PuestoVotacion | undefined): string => {
+  if (!puesto) return '-'
+  if (typeof puesto === 'string') return puesto
+  return puesto.nombre || '-'
 }
 
 export function PersonasTable({
@@ -159,7 +165,7 @@ export function PersonasTable({
                       <span className="text-sm">{persona.municipio || '-'}</span>
                     </TableCell>
                     <TableCell className="py-4">
-                      <span className="text-sm">{persona.puesto_votacion?.nombre || persona.puesto_votacion || '-'}</span>
+                      <span className="text-sm">{getPuestoVotacionNombre(persona.puesto_votacion)}</span>
                     </TableCell>
                     <TableCell className="py-4">
                       <span className="text-sm">{persona.mesa_votacion || '-'}</span>

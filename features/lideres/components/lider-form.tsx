@@ -32,6 +32,7 @@ interface LiderFormProps {
   onOpenChange: (open: boolean) => void
   onSubmit: (data: LiderFormData) => Promise<void>
   initialData?: Profile
+  loading?: boolean
 }
 
 export function LiderForm({
