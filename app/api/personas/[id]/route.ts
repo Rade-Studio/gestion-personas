@@ -15,7 +15,7 @@ export async function GET(
 
     let query = supabase
       .from('personas')
-      .select('*, voto_confirmaciones(*), profiles!personas_registrado_por_fkey(nombres, apellidos)')
+      .select('*, voto_confirmaciones(*), profiles!personas_registrado_por_fkey(nombres, apellidos), barrios(id, codigo, nombre), puestos_votacion(id, codigo, nombre, direccion)')
       .eq('id', id)
 
     // If lider, only allow access to own personas
@@ -118,20 +118,23 @@ export async function PUT(
     const { data, error } = await supabase
       .from('personas')
       .update({
-        ...validatedData,
+        nombres: validatedData.nombres,
+        apellidos: validatedData.apellidos,
+        tipo_documento: validatedData.tipo_documento,
+        numero_documento: validatedData.numero_documento,
         fecha_nacimiento: validatedData.fecha_nacimiento || null,
         fecha_expedicion: validatedData.fecha_expedicion || null,
         profesion: validatedData.profesion || null,
         numero_celular: validatedData.numero_celular || null,
         direccion: validatedData.direccion || null,
-        barrio: validatedData.barrio || null,
+        barrio_id: validatedData.barrio_id || null,
         departamento: validatedData.departamento || null,
         municipio: validatedData.municipio || null,
-        puesto_votacion: validatedData.puesto_votacion || null,
+        puesto_votacion_id: validatedData.puesto_votacion_id || null,
         mesa_votacion: validatedData.mesa_votacion || null,
       })
       .eq('id', id)
-      .select()
+      .select('*, barrios(id, codigo, nombre), puestos_votacion(id, codigo, nombre, direccion)')
       .single()
 
     if (error) {

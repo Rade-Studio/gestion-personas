@@ -13,6 +13,8 @@ export const coordinadorSchema = z.object({
   departamento: z.string().optional().or(z.literal('')),
   municipio: z.string().optional().or(z.literal('')),
   zona: z.string().optional().or(z.literal('')),
+  barrio_id: z.number().int().positive().optional().or(z.null()),
+  puesto_votacion_id: z.number().int().positive().optional().or(z.null()),
   candidato_id: z.string().uuid().optional().or(z.literal('')),
   password: z.string().optional().or(z.literal('')).refine(
     (val) => !val || val.length >= 6,

@@ -40,12 +40,20 @@ export async function POST(request: NextRequest) {
     const workbook = new ExcelJS.Workbook()
     await workbook.xlsx.load(buffer)
 
-    const worksheet = workbook.worksheets[0]
+    // Buscar la hoja "Personas" (segunda hoja)
+    let worksheet = workbook.getWorksheet('Personas')
     if (!worksheet) {
-      return NextResponse.json(
-        { error: 'El archivo Excel no contiene hojas' },
-        { status: 400 }
-      )
+      // Si no existe la hoja "Personas", intentar con la segunda hoja
+      if (workbook.worksheets.length > 1) {
+        worksheet = workbook.worksheets[1]
+      } else if (workbook.worksheets.length > 0) {
+        worksheet = workbook.worksheets[0]
+      } else {
+        return NextResponse.json(
+          { error: 'El archivo Excel no contiene hojas' },
+          { status: 400 }
+        )
+      }
     }
 
     let rows: any[] = []
@@ -156,8 +164,8 @@ export async function POST(request: NextRequest) {
         if (header.includes('Dirección')) {
           rowData.direccion = cellValue?.toString() || ''
         }
-        if (header.includes('Barrio')) {
-          rowData.barrio = cellValue?.toString() || ''
+        if (header.includes('Código Barrio') || header.includes('Barrio')) {
+          rowData.barrio_codigo = cellValue?.toString()?.trim() || ''
         }
         if (header.includes('Departamento')) {
           rowData.departamento = cellValue?.toString() || ''
@@ -165,8 +173,8 @@ export async function POST(request: NextRequest) {
         if (header.includes('Municipio')) {
           rowData.municipio = cellValue?.toString() || ''
         }
-        if (header.includes('Puesto de Votación')) {
-          rowData.puesto_votacion = cellValue?.toString() || ''
+        if (header.includes('Código Puesto') || header.includes('Puesto de Votación')) {
+          rowData.puesto_codigo = cellValue?.toString()?.trim() || ''
         }
         if (header.includes('Mesa de Votación')) {
           rowData.mesa_votacion = cellValue?.toString() || ''
@@ -324,6 +332,55 @@ export async function POST(request: NextRequest) {
     const existingDocumentosMap = new Map(
       existingPersonas?.map((p) => [`${p.tipo_documento}-${p.numero_documento}`, { id: p.id, registrado_por: p.registrado_por, tipo_documento: p.tipo_documento, numero_documento: p.numero_documento }]) || []
     )
+
+    // Obtener mapeo de códigos a IDs para barrios y puestos
+    const { data: barriosData } = await supabase
+      .from('barrios')
+      .select('id, codigo')
+    
+    const { data: puestosData } = await supabase
+      .from('puestos_votacion')
+      .select('id, codigo')
+    
+    const barriosMap = new Map(barriosData?.map(b => [b.codigo, b.id]) || [])
+    const puestosMap = new Map(puestosData?.map(p => [p.codigo, p.id]) || [])
+
+    // Validar y convertir códigos a IDs
+    rows.forEach((row, index) => {
+      const rowNumber = index + 2
+      
+      // Validar código de barrio
+      if (row.barrio_codigo && row.barrio_codigo.trim() !== '') {
+        const barrioId = barriosMap.get(row.barrio_codigo.trim())
+        if (!barrioId) {
+          errors.push({
+            row: rowNumber,
+            error: `Código de barrio "${row.barrio_codigo}" no existe. Debe usar un código válido de la hoja de instrucciones.`,
+          })
+        } else {
+          row.barrio_id = barrioId
+        }
+      }
+      delete row.barrio_codigo
+      
+      // Validar código de puesto de votación
+      if (row.puesto_codigo && row.puesto_codigo.trim() !== '') {
+        const puestoId = puestosMap.get(row.puesto_codigo.trim())
+        if (!puestoId) {
+          errors.push({
+            row: rowNumber,
+            error: `Código de puesto de votación "${row.puesto_codigo}" no existe. Debe usar un código válido de la hoja de instrucciones.`,
+          })
+        } else {
+          row.puesto_votacion_id = puestoId
+        }
+      }
+      delete row.puesto_codigo
+    })
+
+    // Remover filas con errores de códigos
+    const codigoErrorRows = new Set(errors.filter(e => e.error.includes('Código')).map(e => e.row))
+    rows = rows.filter((_, index) => !codigoErrorRows.has(index + 2))
 
     // Separate rows into new and existing
     // Nueva: no existe en la BD
@@ -507,16 +564,19 @@ export async function POST(request: NextRequest) {
         }
         
         return {
-          ...row,
+          nombres: row.nombres,
+          apellidos: row.apellidos,
+          tipo_documento: row.tipo_documento,
+          numero_documento: row.numero_documento,
           fecha_nacimiento: fechaNacimiento,
           fecha_expedicion: fechaExpedicion,
           profesion: row.profesion || null,
           numero_celular: row.numero_celular || null,
           direccion: row.direccion || null,
-          barrio: row.barrio || null,
+          barrio_id: row.barrio_id || null,
           departamento: row.departamento || null,
           municipio: row.municipio || null,
-          puesto_votacion: row.puesto_votacion || null,
+          puesto_votacion_id: row.puesto_votacion_id || null,
           mesa_votacion: row.mesa_votacion || null,
           registrado_por: profile.id,
           es_importado: true,
@@ -610,7 +670,8 @@ export async function POST(request: NextRequest) {
         const { error: updateError } = await supabase
           .from('personas')
           .update({
-            puesto_votacion: row.puesto_votacion || null,
+            barrio_id: row.barrio_id || null,
+            puesto_votacion_id: row.puesto_votacion_id || null,
             mesa_votacion: row.mesa_votacion || null,
             departamento: row.departamento || null,
             municipio: row.municipio || null,

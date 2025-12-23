@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
 
     let query = supabase
       .from('personas')
-      .select('*, voto_confirmaciones(*)', {
+      .select('*, voto_confirmaciones(*), barrios(id, codigo, nombre), puestos_votacion(id, codigo, nombre)', {
         count: 'exact',
       })
 
@@ -69,43 +69,133 @@ export async function GET(request: NextRequest) {
     
     if (estado === 'missing_data') {
       transformedData = transformedData.filter((persona: any) => {
-        const faltaPuestoOMesa = !persona.puesto_votacion || !persona.mesa_votacion
+        const faltaPuestoOMesa = !persona.puesto_votacion_id || !persona.mesa_votacion
         const faltaFechaExpedicion = fechaExpedicionRequired && !persona.fecha_expedicion
         return faltaPuestoOMesa || faltaFechaExpedicion
       })
     } else if (estado === 'confirmed') {
       transformedData = transformedData.filter((persona: any) => 
-        persona.puesto_votacion && persona.mesa_votacion && 
+        persona.puesto_votacion_id && persona.mesa_votacion && 
         (!fechaExpedicionRequired || persona.fecha_expedicion) &&
         persona.confirmacion && !persona.confirmacion.reversado
       )
     } else if (estado === 'pending') {
       transformedData = transformedData.filter((persona: any) => 
-        persona.puesto_votacion && persona.mesa_votacion &&
+        persona.puesto_votacion_id && persona.mesa_votacion &&
         (!fechaExpedicionRequired || persona.fecha_expedicion) &&
         (!persona.confirmacion || persona.confirmacion.reversado)
       )
     }
 
+    // Obtener barrios y puestos de votación para la hoja de instrucciones
+    const [barriosResult, puestosResult] = await Promise.all([
+      supabase.from('barrios').select('codigo, nombre').order('nombre', { ascending: true }),
+      supabase.from('puestos_votacion').select('codigo, nombre, direccion').order('nombre', { ascending: true }),
+    ])
+
+    const barrios = barriosResult.data || []
+    const puestos = puestosResult.data || []
+
     // Create Excel workbook
     const workbook = new ExcelJS.Workbook()
+
+    // Hoja 1: Instrucciones
+    const instruccionesSheet = workbook.addWorksheet('Instrucciones')
+    
+    // Título
+    instruccionesSheet.mergeCells('A1:D1')
+    instruccionesSheet.getCell('A1').value = 'INSTRUCCIONES PARA IMPORTACIÓN DE PERSONAS'
+    instruccionesSheet.getCell('A1').font = { bold: true, size: 14 }
+    instruccionesSheet.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' }
+    instruccionesSheet.getRow(1).height = 25
+
+    // Instrucciones generales
+    instruccionesSheet.getCell('A3').value = 'INSTRUCCIONES GENERALES:'
+    instruccionesSheet.getCell('A3').font = { bold: true }
+    instruccionesSheet.getRow(3).height = 20
+
+    instruccionesSheet.getCell('A4').value = '1. Los campos marcados con * son obligatorios'
+    instruccionesSheet.getCell('A5').value = '2. El formato de fechas debe ser YYYY-MM-DD (ejemplo: 1990-01-15)'
+    instruccionesSheet.getCell('A6').value = fechaExpedicionRequired 
+      ? '3. La fecha de expedición es obligatoria'
+      : '3. La fecha de expedición es opcional'
+    instruccionesSheet.getCell('A7').value = '4. Los tipos de documento válidos son: CC, CE, Pasaporte, TI, Otro'
+    instruccionesSheet.getCell('A8').value = '5. Para Barrio y Puesto de Votación debe usar el CÓDIGO correspondiente (ver tablas abajo)'
+    instruccionesSheet.getCell('A9').value = '6. Si no conoce el código, puede dejar el campo vacío'
+
+    // Espacio
+    instruccionesSheet.getRow(10).height = 10
+
+    // Tabla de Barrios
+    instruccionesSheet.getCell('A12').value = 'CÓDIGOS DE BARRIOS:'
+    instruccionesSheet.getCell('A12').font = { bold: true, size: 12 }
+    instruccionesSheet.getRow(12).height = 20
+
+    instruccionesSheet.getCell('A13').value = 'Código'
+    instruccionesSheet.getCell('B13').value = 'Nombre del Barrio'
+    instruccionesSheet.getRow(13).font = { bold: true }
+    instruccionesSheet.getRow(13).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE0E0E0' },
+    }
+
+    barrios.forEach((barrio, index) => {
+      const row = 14 + index
+      instruccionesSheet.getCell(`A${row}`).value = barrio.codigo
+      instruccionesSheet.getCell(`B${row}`).value = barrio.nombre
+    })
+
+    instruccionesSheet.getColumn('A').width = 15
+    instruccionesSheet.getColumn('B').width = 40
+
+    // Espacio
+    const lastBarrioRow = 14 + barrios.length
+    instruccionesSheet.getRow(lastBarrioRow + 1).height = 10
+
+    // Tabla de Puestos de Votación
+    const puestosStartRow = lastBarrioRow + 3
+    instruccionesSheet.getCell(`A${puestosStartRow}`).value = 'CÓDIGOS DE PUESTOS DE VOTACIÓN:'
+    instruccionesSheet.getCell(`A${puestosStartRow}`).font = { bold: true, size: 12 }
+    instruccionesSheet.getRow(puestosStartRow).height = 20
+
+    instruccionesSheet.getCell(`A${puestosStartRow + 1}`).value = 'Código'
+    instruccionesSheet.getCell(`B${puestosStartRow + 1}`).value = 'Nombre del Puesto'
+    instruccionesSheet.getCell(`C${puestosStartRow + 1}`).value = 'Dirección'
+    instruccionesSheet.getRow(puestosStartRow + 1).font = { bold: true }
+    instruccionesSheet.getRow(puestosStartRow + 1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE0E0E0' },
+    }
+
+    puestos.forEach((puesto, index) => {
+      const row = puestosStartRow + 2 + index
+      instruccionesSheet.getCell(`A${row}`).value = puesto.codigo
+      instruccionesSheet.getCell(`B${row}`).value = puesto.nombre
+      instruccionesSheet.getCell(`C${row}`).value = puesto.direccion || ''
+    })
+
+    instruccionesSheet.getColumn('C').width = 40
+
+    // Hoja 2: Personas (solo títulos)
     const worksheet = workbook.addWorksheet('Personas')
 
     // Define columns
     worksheet.columns = [
-      { header: 'Nombres', key: 'nombres', width: 20 },
-      { header: 'Apellidos', key: 'apellidos', width: 20 },
-      { header: 'Tipo de Documento', key: 'tipo_documento', width: 18 },
-      { header: 'Número de Documento', key: 'numero_documento', width: 20 },
+      { header: 'Nombres *', key: 'nombres', width: 20 },
+      { header: 'Apellidos *', key: 'apellidos', width: 20 },
+      { header: 'Tipo de Documento *', key: 'tipo_documento', width: 18 },
+      { header: 'Número de Documento *', key: 'numero_documento', width: 20 },
       { header: 'Fecha de Nacimiento', key: 'fecha_nacimiento', width: 20 },
       { header: 'Fecha de Expedición', key: 'fecha_expedicion', width: 20 },
       { header: 'Profesión', key: 'profesion', width: 20 },
       { header: 'Número de Celular', key: 'numero_celular', width: 18 },
       { header: 'Dirección', key: 'direccion', width: 30 },
-      { header: 'Barrio', key: 'barrio', width: 20 },
+      { header: 'Código Barrio', key: 'barrio_id', width: 15 },
       { header: 'Departamento', key: 'departamento', width: 20 },
       { header: 'Municipio', key: 'municipio', width: 20 },
-      { header: 'Puesto de Votación', key: 'puesto_votacion', width: 20 },
+      { header: 'Código Puesto de Votación', key: 'puesto_votacion_id', width: 25 },
       { header: 'Mesa de Votación', key: 'mesa_votacion', width: 20 },
     ]
 
@@ -116,6 +206,7 @@ export async function GET(request: NextRequest) {
       pattern: 'solid',
       fgColor: { argb: 'FFE0E0E0' },
     }
+    worksheet.getRow(1).height = 25
 
     // Add data rows
     transformedData.forEach((persona: any) => {
@@ -129,10 +220,10 @@ export async function GET(request: NextRequest) {
         profesion: persona.profesion || '',
         numero_celular: persona.numero_celular || '',
         direccion: persona.direccion || '',
-        barrio: persona.barrio || '',
+        barrio_id: persona.barrios?.codigo || '',
         departamento: persona.departamento || '',
         municipio: persona.municipio || '',
-        puesto_votacion: persona.puesto_votacion || '',
+        puesto_votacion_id: persona.puestos_votacion?.codigo || '',
         mesa_votacion: persona.mesa_votacion || '',
       })
     })

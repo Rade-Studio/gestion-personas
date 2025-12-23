@@ -48,6 +48,7 @@ import type { Profile } from '@/lib/types'
 export default function CoordinadoresPage() {
   const [coordinadores, setCoordinadores] = useState<Profile[]>([])
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [formOpen, setFormOpen] = useState(false)
   const [editingCoordinador, setEditingCoordinador] = useState<Profile | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -87,6 +88,7 @@ export default function CoordinadoresPage() {
   }
 
   const handleSubmit = async (data: CoordinadorFormData) => {
+    setSaving(true)
     try {
       const url = editingCoordinador
         ? `/api/coordinadores/${editingCoordinador.id}`
@@ -115,6 +117,9 @@ export default function CoordinadoresPage() {
       }
     } catch (error: any) {
       toast.error(error.message)
+      throw error
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -235,9 +240,17 @@ export default function CoordinadoresPage() {
 
         <CoordinadorForm
           open={formOpen}
-          onOpenChange={setFormOpen}
+          onOpenChange={(open) => {
+            if (!saving) {
+              setFormOpen(open)
+              if (!open) {
+                setEditingCoordinador(null)
+              }
+            }
+          }}
           onSubmit={handleSubmit}
           initialData={editingCoordinador || undefined}
+          loading={saving}
         />
 
         <Dialog open={!!credentials} onOpenChange={() => setCredentials(null)}>

@@ -53,7 +53,7 @@ export default function PersonasPage() {
   const [filters, setFilters] = useState<any>({})
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
-  const [puestosVotacion, setPuestosVotacion] = useState<string[]>([])
+  const [puestosVotacion, setPuestosVotacion] = useState<Array<{ id: number; codigo: string; nombre: string }>>([])
   const [mesasVotacion, setMesasVotacion] = useState<string[]>([])
   const [lideres, setLideres] = useState<Array<{ id: string; nombres: string; apellidos: string }>>([])
   const [coordinadores, setCoordinadores] = useState<Array<{ id: string; nombres: string; apellidos: string }>>([])
@@ -113,22 +113,22 @@ export default function PersonasPage() {
 
   const fetchFilters = useCallback(async () => {
     try {
+      // Cargar lista completa de puestos de votación desde la API
+      try {
+        const puestosResponse = await fetch('/api/puestos-votacion')
+        const puestosData = await puestosResponse.json()
+        if (puestosResponse.ok && puestosData.data) {
+          setPuestosVotacion(puestosData.data)
+        }
+      } catch (puestosError) {
+        console.error('Error al cargar puestos de votación:', puestosError)
+      }
+
+      // Cargar mesas desde personas
       const response = await fetch('/api/personas?limit=1000')
       const data = await response.json()
 
       if (data.data) {
-        // Get unique puestos, normalize (trim) and filter out empty values
-        const puestosSet = new Set<string>()
-        data.data.forEach((p: PersonaWithConfirmacion) => {
-          if (p.puesto_votacion) {
-            const normalized = p.puesto_votacion.trim()
-            if (normalized) {
-              puestosSet.add(normalized)
-            }
-          }
-        })
-        const puestos = Array.from(puestosSet).sort()
-        
         // Get unique mesas, normalize (trim) and filter out empty values
         const mesasSet = new Set<string>()
         data.data.forEach((p: PersonaWithConfirmacion) => {
@@ -141,7 +141,6 @@ export default function PersonasPage() {
         })
         const mesas = Array.from(mesasSet).sort()
         
-        setPuestosVotacion(puestos)
         setMesasVotacion(mesas)
       }
 
@@ -236,11 +235,11 @@ export default function PersonasPage() {
       const total = allPersonas.length
       const datosFaltantes = allPersonas.filter((p: PersonaWithConfirmacion) => !p.puesto_votacion || !p.mesa_votacion).length
       const confirmadas = allPersonas.filter((p: PersonaWithConfirmacion) => 
-        p.puesto_votacion && p.mesa_votacion && 
+        (p.puesto_votacion?.nombre || p.puesto_votacion) && p.mesa_votacion && 
         p.confirmacion && !p.confirmacion.reversado
       ).length
       const pendientes = allPersonas.filter((p: PersonaWithConfirmacion) => 
-        p.puesto_votacion && p.mesa_votacion &&
+        (p.puesto_votacion?.nombre || p.puesto_votacion) && p.mesa_votacion &&
         (!p.confirmacion || p.confirmacion.reversado)
       ).length
 
