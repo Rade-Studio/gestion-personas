@@ -48,6 +48,11 @@ export function PersonaForm({
   const [loadingPuestos, setLoadingPuestos] = useState(false)
   const [isDataLoaded, setIsDataLoaded] = useState(false)
 
+  // Configuración de valores por defecto
+  const useDefaultLocation = process.env.NEXT_PUBLIC_USE_DEFAULT_LOCATION === 'true'
+  const defaultDepartamento = process.env.NEXT_PUBLIC_DEFAULT_DEPARTAMENTO || 'Atlántico'
+  const defaultMunicipio = process.env.NEXT_PUBLIC_DEFAULT_MUNICIPIO || 'Soledad'
+
   const form = useForm<PersonaFormData>({
     resolver: zodResolver(personaSchema),
     defaultValues: {
@@ -62,8 +67,8 @@ export function PersonaForm({
       direccion: '',
       barrio_id: undefined,
       barrio: '',
-      departamento: '',
-      municipio: '',
+      departamento: useDefaultLocation ? defaultDepartamento : '',
+      municipio: useDefaultLocation ? defaultMunicipio : '',
       puesto_votacion_id: undefined,
       puesto_votacion: '',
       mesa_votacion: '',
@@ -131,8 +136,8 @@ export function PersonaForm({
         direccion: initialData.direccion || '',
         barrio_id: barrioId,
         barrio: typeof initialData.barrio === 'string' ? initialData.barrio : (initialData.barrio as any)?.nombre || '',
-        departamento: initialData.departamento || '',
-        municipio: initialData.municipio || '',
+        departamento: initialData.departamento || (useDefaultLocation ? defaultDepartamento : ''),
+        municipio: initialData.municipio || (useDefaultLocation ? defaultMunicipio : ''),
         puesto_votacion_id: puestoVotacionId,
         puesto_votacion: typeof initialData.puesto_votacion === 'string' ? initialData.puesto_votacion : (initialData.puesto_votacion as any)?.nombre || '',
         mesa_votacion: initialData.mesa_votacion || '',
@@ -150,8 +155,8 @@ export function PersonaForm({
         direccion: '',
         barrio_id: undefined,
         barrio: '',
-        departamento: '',
-        municipio: '',
+        departamento: useDefaultLocation ? defaultDepartamento : '',
+        municipio: useDefaultLocation ? defaultMunicipio : '',
         puesto_votacion_id: undefined,
         puesto_votacion: '',
         mesa_votacion: '',
@@ -190,7 +195,7 @@ export function PersonaForm({
 
   return (
     <Dialog open={open} onOpenChange={handleDialogChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto sm:w-full md:max-w-3xl lg:max-w-4xl xl:max-w-5xl">
         <DialogHeader>
           <DialogTitle>
             {initialData ? 'Editar Persona' : 'Nueva Persona'}
@@ -223,7 +228,7 @@ export function PersonaForm({
         ) : (
           <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="nombres"
@@ -252,7 +257,7 @@ export function PersonaForm({
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="tipo_documento"
@@ -296,64 +301,66 @@ export function PersonaForm({
               />
             </div>
 
-            <FormField
-              control={form.control}
-              name="fecha_nacimiento"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Fecha de Nacimiento</FormLabel>
-                  <FormControl>
-                    <Input type="date" {...field} disabled={loading} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="fecha_nacimiento"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Fecha de Nacimiento</FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} disabled={loading} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-            <FormField
-              control={form.control}
-              name="fecha_expedicion"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>
-                    Fecha de Expedición
-                    {process.env.NEXT_PUBLIC_FECHA_EXPEDICION_REQUIRED === 'true' && ' *'}
-                  </FormLabel>
-                  <FormControl>
-                    <Input type="date" {...field} disabled={loading} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+              <FormField
+                control={form.control}
+                name="fecha_expedicion"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>
+                      Fecha de Expedición
+                      {process.env.NEXT_PUBLIC_FECHA_EXPEDICION_REQUIRED === 'true' && ' *'}
+                    </FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} disabled={loading} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-            <FormField
-              control={form.control}
-              name="profesion"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Profesión</FormLabel>
-                  <FormControl>
-                    <Input {...field} disabled={loading} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+              <FormField
+                control={form.control}
+                name="profesion"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Profesión</FormLabel>
+                    <FormControl>
+                      <Input {...field} disabled={loading} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-            <FormField
-              control={form.control}
-              name="numero_celular"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Número de Celular</FormLabel>
-                  <FormControl>
-                    <Input {...field} disabled={loading} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+              <FormField
+                control={form.control}
+                name="numero_celular"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Número de Celular</FormLabel>
+                    <FormControl>
+                      <Input {...field} disabled={loading} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
             <FormField
               control={form.control}
@@ -408,7 +415,7 @@ export function PersonaForm({
               )}
             />
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="departamento"
@@ -416,7 +423,7 @@ export function PersonaForm({
                   <FormItem>
                     <FormLabel>Departamento</FormLabel>
                     <FormControl>
-                      <Input {...field} disabled={loading} />
+                      <Input {...field} disabled={loading || useDefaultLocation} readOnly={useDefaultLocation} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -429,7 +436,7 @@ export function PersonaForm({
                   <FormItem>
                     <FormLabel>Municipio</FormLabel>
                     <FormControl>
-                      <Input {...field} disabled={loading} />
+                      <Input {...field} disabled={loading || useDefaultLocation} readOnly={useDefaultLocation} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -437,7 +444,7 @@ export function PersonaForm({
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="puesto_votacion_id"

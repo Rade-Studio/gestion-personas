@@ -55,7 +55,6 @@ export default function LideresPage() {
   const [editingLider, setEditingLider] = useState<Profile | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [liderToDelete, setLiderToDelete] = useState<string | null>(null)
-  const [credentials, setCredentials] = useState<{ email: string; password: string } | null>(null)
 
   const fetchLideres = async () => {
     setLoading(true)
@@ -109,14 +108,10 @@ export default function LideresPage() {
         throw new Error(result.error || 'Error al guardar líder')
       }
 
-      if (result.credentials) {
-        setCredentials(result.credentials)
-      } else {
-        toast.success(editingLider ? 'Líder actualizado' : 'Líder creado')
-        setFormOpen(false)
-        setEditingLider(null)
-        fetchLideres()
-      }
+      toast.success(editingLider ? 'Líder actualizado' : 'Líder creado')
+      setFormOpen(false)
+      setEditingLider(null)
+      fetchLideres()
     } catch (error: any) {
       toast.error(error.message)
       throw error
@@ -263,37 +258,6 @@ export default function LideresPage() {
           loading={saving}
         />
 
-        <Dialog open={!!credentials} onOpenChange={() => setCredentials(null)}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Líder Creado Exitosamente</DialogTitle>
-              <DialogDescription>
-                Guarde estas credenciales para el nuevo líder
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Email</Label>
-                <Input value={credentials?.email || ''} readOnly />
-              </div>
-              <div className="space-y-2">
-                <Label>Contraseña</Label>
-                <Input value={credentials?.password || ''} readOnly />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button
-                onClick={() => {
-                  setCredentials(null)
-                  setFormOpen(false)
-                  fetchLideres()
-                }}
-              >
-                Cerrar
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
 
         {/* Delete Confirmation Dialog */}
         <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

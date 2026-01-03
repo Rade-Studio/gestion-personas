@@ -79,9 +79,9 @@ export async function requireLiderOrAdmin() {
     throw new Error('No autenticado: no se pudo obtener el perfil')
   }
 
-  // Permitir líderes, coordinadores y admins
-  if (profile.role !== 'admin' && profile.role !== 'coordinador' && profile.role !== 'lider') {
-    throw new Error('No autorizado: se requiere rol de administrador, coordinador o líder')
+  // Permitir líderes, coordinadores, admins y consultores
+  if (profile.role !== 'admin' && profile.role !== 'coordinador' && profile.role !== 'lider' && profile.role !== 'consultor') {
+    throw new Error('No autorizado: se requiere rol de administrador, coordinador, líder o consultor')
   }
   return profile
 }
@@ -133,5 +133,50 @@ export async function requireCoordinadorOrAdmin() {
 
 export async function requireAdminOrCoordinador() {
   return requireCoordinadorOrAdmin()
+}
+
+export async function requireConsultor() {
+  const profile = await getCurrentProfile()
+  if (!profile || profile.role !== 'consultor') {
+    throw new Error('No autorizado: se requiere rol de consultor')
+  }
+  return profile
+}
+
+export async function requireConsultorOrAdmin() {
+  const user = await getCurrentUser()
+  if (!user) {
+    throw new Error('No autenticado')
+  }
+
+  // Intentar obtener el perfil con el cliente normal primero
+  let profile = await getCurrentProfile()
+  
+  // Si no se puede obtener con el cliente normal (por RLS), usar admin client
+  if (!profile) {
+    const adminClient = createAdminClient()
+    const { data: adminProfile, error } = await adminClient
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single()
+    
+    if (error || !adminProfile) {
+      throw new Error('No autenticado: no se pudo obtener el perfil')
+    }
+    
+    profile = adminProfile
+  }
+
+  // Asegurar que profile no sea null
+  if (!profile) {
+    throw new Error('No autenticado: no se pudo obtener el perfil')
+  }
+
+  // Verificar que el rol sea válido
+  if (profile.role !== 'admin' && profile.role !== 'consultor') {
+    throw new Error('No autorizado: se requiere rol de administrador o consultor')
+  }
+  return profile
 }
 

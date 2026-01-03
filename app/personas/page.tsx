@@ -54,6 +54,7 @@ export default function PersonasPage() {
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [puestosVotacion, setPuestosVotacion] = useState<Array<{ id: number; codigo: string; nombre: string }>>([])
+  const [barrios, setBarrios] = useState<Array<{ id: number; codigo: string; nombre: string }>>([])
   const [mesasVotacion, setMesasVotacion] = useState<string[]>([])
   const [lideres, setLideres] = useState<Array<{ id: string; nombres: string; apellidos: string }>>([])
   const [coordinadores, setCoordinadores] = useState<Array<{ id: string; nombres: string; apellidos: string }>>([])
@@ -122,6 +123,17 @@ export default function PersonasPage() {
         }
       } catch (puestosError) {
         console.error('Error al cargar puestos de votación:', puestosError)
+      }
+
+      // Cargar lista completa de barrios desde la API
+      try {
+        const barriosResponse = await fetch('/api/barrios')
+        const barriosData = await barriosResponse.json()
+        if (barriosResponse.ok && barriosData.data) {
+          setBarrios(barriosData.data)
+        }
+      } catch (barriosError) {
+        console.error('Error al cargar barrios:', barriosError)
       }
 
       // Cargar mesas desde personas
@@ -434,7 +446,18 @@ export default function PersonasPage() {
       
       // Add active filters
       if (filters.puesto_votacion) {
-        params.append('puesto_votacion', filters.puesto_votacion)
+        if (Array.isArray(filters.puesto_votacion)) {
+          filters.puesto_votacion.forEach((pv: string) => params.append('puesto_votacion', pv))
+        } else {
+          params.append('puesto_votacion', filters.puesto_votacion)
+        }
+      }
+      if (filters.barrio_id) {
+        if (Array.isArray(filters.barrio_id)) {
+          filters.barrio_id.forEach((bid: string) => params.append('barrio_id', bid))
+        } else {
+          params.append('barrio_id', filters.barrio_id)
+        }
       }
       if (filters.numero_documento) {
         params.append('numero_documento', filters.numero_documento)
@@ -685,6 +708,7 @@ export default function PersonasPage() {
         <PersonasFilters
           onFilter={setFilters}
           puestosVotacion={puestosVotacion}
+          barrios={barrios}
           mesasVotacion={[]}
           lideres={(profile?.role === 'admin' || profile?.role === 'coordinador') ? lideres : undefined}
           coordinadores={profile?.role === 'admin' ? coordinadores : undefined}

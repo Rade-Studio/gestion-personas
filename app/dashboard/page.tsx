@@ -20,7 +20,7 @@ interface DashboardStats {
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(true)
-  const { isAdmin, isCoordinador, isLider, profile } = useAuth()
+  const { isAdmin, isCoordinador, isLider, isConsultor, profile } = useAuth()
   const enableAdminCharts = process.env.NEXT_PUBLIC_ENABLE_ADMIN_CHARTS === 'true'
 
   // Obtener descripción según el rol
@@ -239,12 +239,12 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {isAdmin && enableAdminCharts && (
+        {(isAdmin || isConsultor) && enableAdminCharts && (
           <div className="space-y-6">
             <div>
               <h2 className="text-2xl font-bold tracking-tight">Estadísticas Avanzadas</h2>
               <p className="text-muted-foreground mt-1.5">
-                Gráficos detallados para administradores
+                Gráficos detallados para administradores y consultores
               </p>
             </div>
 

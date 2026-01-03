@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { requireAdmin } from '@/lib/auth/helpers'
+import { requireAdmin, requireConsultorOrAdmin } from '@/lib/auth/helpers'
 import { coordinadorSchema } from '@/features/coordinadores/validations/coordinador'
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAdmin()
+    // Permitir GET a consultores también
+    try {
+      await requireAdmin()
+    } catch {
+      await requireConsultorOrAdmin()
+    }
     const supabase = await createClient()
 
     const { data: coordinadores, error } = await supabase
@@ -77,9 +82,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Generate default email if not provided
-    const email = validatedData.email?.trim() || `${validatedData.numero_documento}@sistema.local`
-    const password = validatedData.password?.trim() || `Coordinador${validatedData.numero_documento.slice(-4)}`
+    // Email y contraseña automáticos basados en número de documento
+    const email = `${validatedData.numero_documento}@sistema.local`
+    const password = validatedData.numero_documento
 
     // Get default candidate if candidato_id not provided
     let candidatoId = validatedData.candidato_id?.trim() || null
@@ -141,10 +146,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         data: profile,
-        credentials: {
-          email,
-          password,
-        },
       },
       { status: 201 }
     )

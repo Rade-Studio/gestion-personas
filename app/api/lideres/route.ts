@@ -1,19 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { requireCoordinadorOrAdmin, getCurrentProfile } from '@/lib/auth/helpers'
+import { requireCoordinadorOrAdmin, getCurrentProfile, requireConsultorOrAdmin } from '@/lib/auth/helpers'
 import { liderSchema } from '@/features/lideres/validations/lider'
 
 export async function GET(request: NextRequest) {
   try {
-    const profile = await requireCoordinadorOrAdmin()
+    // Permitir GET a consultores también
+    let profile
+    try {
+      profile = await requireCoordinadorOrAdmin()
+    } catch {
+      profile = await requireConsultorOrAdmin()
+    }
     const supabase = await createClient()
 
     let query = supabase
       .from('profiles')
       .select(`
         *,
-        candidato:candidatos(id, nombre_completo)
+        candidato:candidatos(id, nombre_completo),
+        puesto_votacion:puestos_votacion(id, nombre, codigo)
       `)
       .eq('role', 'lider')
 
@@ -42,7 +49,14 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Consultores no pueden crear
     const profile = await requireCoordinadorOrAdmin()
+    if (profile.role === 'consultor') {
+      return NextResponse.json(
+        { error: 'No autorizado: los consultores no pueden crear registros' },
+        { status: 403 }
+      )
+    }
     const supabase = await createClient()
     const adminClient = createAdminClient()
 
@@ -63,9 +77,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Generate default email if not provided
-    const email = validatedData.email?.trim() || `${validatedData.numero_documento}@sistema.local`
-    const password = validatedData.password?.trim() || `Lider${validatedData.numero_documento.slice(-4)}`
+    // Email y contraseña automáticos basados en número de documento
+    const email = `${validatedData.numero_documento}@sistema.local`
+    const password = validatedData.numero_documento
 
     // Get candidato_id: coordinadores heredan su candidato, admins pueden especificar o usar default
     let candidatoId = validatedData.candidato_id?.trim() || null
@@ -122,6 +136,8 @@ export async function POST(request: NextRequest) {
         zona: validatedData.zona || null,
         candidato_id: candidatoId,
         coordinador_id: coordinadorId,
+        puesto_votacion_id: validatedData.puesto_votacion_id || null,
+        mesa_votacion: validatedData.mesa_votacion || null,
         role: 'lider',
       })
       .select()
@@ -139,10 +155,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         data: newProfile,
-        credentials: {
-          email,
-          password,
-        },
       },
       { status: 201 }
     )

@@ -65,8 +65,6 @@ export function CoordinadorForm({
       barrio_id: undefined,
       puesto_votacion_id: undefined,
       candidato_id: '',
-      password: '',
-      email: '',
     },
   })
 
@@ -154,8 +152,6 @@ export function CoordinadorForm({
         barrio_id: undefined,
         puesto_votacion_id: undefined,
         candidato_id: initialData.candidato_id || '',
-        password: '',
-        email: '',
       })
     } else {
       form.reset({
@@ -171,8 +167,6 @@ export function CoordinadorForm({
         barrio_id: undefined,
         puesto_votacion_id: undefined,
         candidato_id: '',
-        password: '',
-        email: '',
       })
     }
   }, [initialData, form])
@@ -199,7 +193,7 @@ export function CoordinadorForm({
 
   return (
     <Dialog open={open} onOpenChange={handleDialogChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto sm:w-full md:max-w-3xl lg:max-w-4xl xl:max-w-5xl">
         <DialogHeader>
           <DialogTitle>
             {initialData ? 'Editar Coordinador' : 'Nuevo Coordinador'}
@@ -295,7 +289,7 @@ export function CoordinadorForm({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="fecha_nacimiento">Fecha de Nacimiento</Label>
               <Input
@@ -310,11 +304,12 @@ export function CoordinadorForm({
               <Input
                 id="telefono"
                 {...form.register('telefono')}
+                disabled={loading}
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="departamento">Departamento</Label>
               <Input
@@ -328,13 +323,6 @@ export function CoordinadorForm({
               <Input
                 id="municipio"
                 {...form.register('municipio')}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="zona">Zona</Label>
-              <Input
-                id="zona"
-                {...form.register('zona')}
                 disabled={loading}
               />
             </div>
@@ -426,49 +414,6 @@ export function CoordinadorForm({
             </p>
           </div>
 
-          {!initialData && (
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email (opcional)</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  {...form.register('email')}
-                  disabled={loading}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Si no se proporciona, se generará automáticamente
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">Contraseña (opcional)</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  {...form.register('password')}
-                  disabled={loading}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Si no se proporciona, se generará automáticamente
-                </p>
-              </div>
-            </div>
-          )}
-
-          {initialData && (
-            <div className="space-y-2">
-              <Label htmlFor="password">Nueva Contraseña (opcional)</Label>
-              <Input
-                id="password"
-                type="password"
-                {...form.register('password')}
-                disabled={loading}
-              />
-              <p className="text-xs text-muted-foreground">
-                Deje vacío para mantener la contraseña actual
-              </p>
-            </div>
-          )}
 
           <DialogFooter>
             <Button

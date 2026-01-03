@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { requireLiderOrAdmin, getCurrentProfile, requireCoordinadorOrAdmin } from '@/lib/auth/helpers'
+import { requireLiderOrAdmin, getCurrentProfile, requireCoordinadorOrAdmin, requireConsultorOrAdmin } from '@/lib/auth/helpers'
 import { personaSchema } from '@/features/personas/validations/persona'
 import {
   isDocumentValidationEnabled,
@@ -11,11 +11,20 @@ import {
 
 export async function GET(request: NextRequest) {
   try {
-    const profile = await requireLiderOrAdmin()
+    // Permitir GET a consultores también
+    let profile
+    try {
+      profile = await requireLiderOrAdmin()
+    } catch {
+      profile = await requireConsultorOrAdmin()
+    }
     const supabase = await createClient()
 
     const searchParams = request.nextUrl.searchParams
     const puestoVotacion = searchParams.get('puesto_votacion')
+    const puestoVotacionArray = searchParams.getAll('puesto_votacion')
+    const barrioId = searchParams.get('barrio_id')
+    const barrioIdArray = searchParams.getAll('barrio_id')
     const numeroDocumento = searchParams.get('numero_documento')
     const liderId = searchParams.get('lider_id')
     const coordinadorId = searchParams.get('coordinador_id')
@@ -83,8 +92,20 @@ export async function GET(request: NextRequest) {
       // Líder solo ve sus propias personas (RLS ya lo maneja)
     }
 
-    if (puestoVotacion) {
-      // Puede ser código o ID, intentar ambos
+    // Handle multiple puesto_votacion filters
+    if (puestoVotacionArray.length > 0) {
+      const puestoIds = puestoVotacionArray
+        .map((pv) => {
+          const id = parseInt(pv)
+          return !isNaN(id) ? id : null
+        })
+        .filter((id): id is number => id !== null)
+      
+      if (puestoIds.length > 0) {
+        query = query.in('puesto_votacion_id', puestoIds)
+      }
+    } else if (puestoVotacion) {
+      // Fallback to single value for backward compatibility
       const puestoId = parseInt(puestoVotacion)
       if (!isNaN(puestoId)) {
         query = query.eq('puesto_votacion_id', puestoId)
@@ -98,6 +119,26 @@ export async function GET(request: NextRequest) {
         if (puesto) {
           query = query.eq('puesto_votacion_id', puesto.id)
         }
+      }
+    }
+
+    // Handle multiple barrio_id filters
+    if (barrioIdArray.length > 0) {
+      const barrioIds = barrioIdArray
+        .map((bid) => {
+          const id = parseInt(bid)
+          return !isNaN(id) ? id : null
+        })
+        .filter((id): id is number => id !== null)
+      
+      if (barrioIds.length > 0) {
+        query = query.in('barrio_id', barrioIds)
+      }
+    } else if (barrioId) {
+      // Fallback to single value for backward compatibility
+      const barrioIdNum = parseInt(barrioId)
+      if (!isNaN(barrioIdNum)) {
+        query = query.eq('barrio_id', barrioIdNum)
       }
     }
 

@@ -62,8 +62,38 @@ export default function LoginPage() {
   const onSubmit = async (data: LoginFormData) => {
     setLoading(true)
     try {
+      // Determinar si es email o número de documento
+      const isEmail = data.email.includes('@')
+      let emailToUse = data.email
+
+      // Si no es email, buscar el email asociado al número de documento
+      if (!isEmail) {
+        try {
+          const response = await fetch('/api/auth/get-email-by-document', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ numero_documento: data.email }),
+          })
+
+          const result = await response.json()
+
+          if (!response.ok || !result.email) {
+            toast.error('Credenciales inválidas')
+            return
+          }
+
+          emailToUse = result.email
+        } catch (error) {
+          toast.error('Error al buscar usuario')
+          return
+        }
+      }
+
+      // Intentar login con el email encontrado o proporcionado
       const { error } = await supabase.auth.signInWithPassword({
-        email: data.email,
+        email: emailToUse,
         password: data.password,
       })
 
@@ -154,11 +184,11 @@ export default function LoginPage() {
             <CardContent className="pt-6">
               <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
+                  <Label htmlFor="email">Email o Número de documento</Label>
                   <Input
                     id="email"
-                    type="email"
-                    placeholder="tu@email.com"
+                    type="text"
+                    placeholder="tu@email.com o número de documento"
                     {...register('email')}
                     disabled={loading}
                     className="h-11"

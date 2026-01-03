@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { requireCoordinadorOrAdmin, getCurrentProfile } from '@/lib/auth/helpers'
+import { requireCoordinadorOrAdmin, getCurrentProfile, requireConsultorOrAdmin } from '@/lib/auth/helpers'
 import { liderSchema } from '@/features/lideres/validations/lider'
 
 export async function GET(
@@ -9,13 +9,22 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const profile = await requireCoordinadorOrAdmin()
+    // Permitir GET a consultores también
+    let profile
+    try {
+      profile = await requireCoordinadorOrAdmin()
+    } catch {
+      profile = await requireConsultorOrAdmin()
+    }
     const { id } = await params
     const supabase = await createClient()
 
     let query = supabase
       .from('profiles')
-      .select('*')
+      .select(`
+        *,
+        puesto_votacion:puestos_votacion(id, nombre, codigo)
+      `)
       .eq('id', id)
       .eq('role', 'lider')
 
@@ -47,7 +56,14 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Consultores no pueden modificar
     const profile = await requireCoordinadorOrAdmin()
+    if (profile.role === 'consultor') {
+      return NextResponse.json(
+        { error: 'No autorizado: los consultores no pueden modificar registros' },
+        { status: 403 }
+      )
+    }
     const { id } = await params
     const supabase = await createClient()
 
@@ -89,18 +105,18 @@ export async function PUT(
           { status: 400 }
         )
       }
-    }
 
-    // Update password if provided
-    if (validatedData.password?.trim()) {
+      // Si cambió el número de documento, actualizar email y contraseña
       const adminClient = createAdminClient()
-      const { error: passwordError } = await adminClient.auth.admin.updateUserById(id, {
-        password: validatedData.password.trim(),
+      const newEmail = `${validatedData.numero_documento}@sistema.local`
+      const { error: updateAuthError } = await adminClient.auth.admin.updateUserById(id, {
+        email: newEmail,
+        password: validatedData.numero_documento,
       })
 
-      if (passwordError) {
+      if (updateAuthError) {
         return NextResponse.json(
-          { error: 'Error al actualizar contraseña: ' + passwordError.message },
+          { error: 'Error al actualizar credenciales: ' + updateAuthError.message },
           { status: 500 }
         )
       }
@@ -137,6 +153,8 @@ export async function PUT(
       municipio: validatedData.municipio || null,
       zona: validatedData.zona || null,
       candidato_id: candidatoId,
+      puesto_votacion_id: validatedData.puesto_votacion_id || null,
+      mesa_votacion: validatedData.mesa_votacion || null,
     }
 
     // Solo admins pueden cambiar el coordinador_id
@@ -179,7 +197,14 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Consultores no pueden eliminar
     const profile = await requireCoordinadorOrAdmin()
+    if (profile.role === 'consultor') {
+      return NextResponse.json(
+        { error: 'No autorizado: los consultores no pueden eliminar registros' },
+        { status: 403 }
+      )
+    }
     const { id } = await params
     const supabase = await createClient()
 
