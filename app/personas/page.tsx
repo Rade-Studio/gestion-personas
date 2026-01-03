@@ -447,14 +447,14 @@ export default function PersonasPage() {
       // Add active filters
       if (filters.puesto_votacion) {
         if (Array.isArray(filters.puesto_votacion)) {
-          filters.puesto_votacion.forEach((pv) => params.append('puesto_votacion', pv))
+          filters.puesto_votacion.forEach((pv: string) => params.append('puesto_votacion', pv))
         } else {
           params.append('puesto_votacion', filters.puesto_votacion)
         }
       }
       if (filters.barrio_id) {
         if (Array.isArray(filters.barrio_id)) {
-          filters.barrio_id.forEach((bid) => params.append('barrio_id', bid))
+          filters.barrio_id.forEach((bid: string) => params.append('barrio_id', bid))
         } else {
           params.append('barrio_id', filters.barrio_id)
         }
