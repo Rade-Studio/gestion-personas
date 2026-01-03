@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { requireAdmin } from '@/lib/auth/helpers'
+import { requireAdmin, requireConsultorOrAdmin } from '@/lib/auth/helpers'
 import { coordinadorSchema } from '@/features/coordinadores/validations/coordinador'
 
 export async function GET(
@@ -9,7 +9,12 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireAdmin()
+    // Permitir GET a consultores también
+    try {
+      await requireAdmin()
+    } catch {
+      await requireConsultorOrAdmin()
+    }
     const { id } = await params
     const supabase = await createClient()
 
@@ -44,6 +49,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Solo admins pueden modificar coordinadores
     await requireAdmin()
     const { id } = await params
     const supabase = await createClient()
@@ -81,18 +87,18 @@ export async function PUT(
           { status: 400 }
         )
       }
-    }
 
-    // Update password if provided
-    if (validatedData.password?.trim()) {
+      // Si cambió el número de documento, actualizar email y contraseña
       const adminClient = createAdminClient()
-      const { error: passwordError } = await adminClient.auth.admin.updateUserById(id, {
-        password: validatedData.password.trim(),
+      const newEmail = `${validatedData.numero_documento}@sistema.local`
+      const { error: updateAuthError } = await adminClient.auth.admin.updateUserById(id, {
+        email: newEmail,
+        password: validatedData.numero_documento,
       })
 
-      if (passwordError) {
+      if (updateAuthError) {
         return NextResponse.json(
-          { error: 'Error al actualizar contraseña: ' + passwordError.message },
+          { error: 'Error al actualizar credenciales: ' + updateAuthError.message },
           { status: 500 }
         )
       }
@@ -146,6 +152,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Solo admins pueden eliminar coordinadores
     await requireAdmin()
     const { id } = await params
     const supabase = await createClient()

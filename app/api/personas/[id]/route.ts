@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { requireLiderOrAdmin, getCurrentProfile } from '@/lib/auth/helpers'
+import { requireLiderOrAdmin, getCurrentProfile, requireConsultorOrAdmin } from '@/lib/auth/helpers'
 import { personaSchema } from '@/features/personas/validations/persona'
 import { isDocumentValidationEnabled, deletePerson } from '@/lib/pocketbase/client'
 
@@ -9,7 +9,13 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const profile = await requireLiderOrAdmin()
+    // Permitir GET a consultores también
+    let profile
+    try {
+      profile = await requireLiderOrAdmin()
+    } catch {
+      profile = await requireConsultorOrAdmin()
+    }
     const { id } = await params
     const supabase = await createClient()
 
@@ -63,7 +69,14 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Consultores no pueden modificar
     const profile = await requireLiderOrAdmin()
+    if (profile.role === 'consultor') {
+      return NextResponse.json(
+        { error: 'No autorizado: los consultores no pueden modificar registros' },
+        { status: 403 }
+      )
+    }
     const { id } = await params
     const supabase = await createClient()
 
@@ -165,7 +178,14 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Consultores no pueden eliminar
     const profile = await requireLiderOrAdmin()
+    if (profile.role === 'consultor') {
+      return NextResponse.json(
+        { error: 'No autorizado: los consultores no pueden eliminar registros' },
+        { status: 403 }
+      )
+    }
     const { id } = await params
     const supabase = await createClient()
 

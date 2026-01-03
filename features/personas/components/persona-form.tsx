@@ -190,7 +190,7 @@ export function PersonaForm({
 
   return (
     <Dialog open={open} onOpenChange={handleDialogChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto sm:w-full md:max-w-3xl lg:max-w-4xl xl:max-w-5xl">
         <DialogHeader>
           <DialogTitle>
             {initialData ? 'Editar Persona' : 'Nueva Persona'}
@@ -223,7 +223,7 @@ export function PersonaForm({
         ) : (
           <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="nombres"
@@ -252,7 +252,7 @@ export function PersonaForm({
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="tipo_documento"
@@ -296,64 +296,66 @@ export function PersonaForm({
               />
             </div>
 
-            <FormField
-              control={form.control}
-              name="fecha_nacimiento"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Fecha de Nacimiento</FormLabel>
-                  <FormControl>
-                    <Input type="date" {...field} disabled={loading} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="fecha_nacimiento"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Fecha de Nacimiento</FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} disabled={loading} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-            <FormField
-              control={form.control}
-              name="fecha_expedicion"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>
-                    Fecha de Expedición
-                    {process.env.NEXT_PUBLIC_FECHA_EXPEDICION_REQUIRED === 'true' && ' *'}
-                  </FormLabel>
-                  <FormControl>
-                    <Input type="date" {...field} disabled={loading} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+              <FormField
+                control={form.control}
+                name="fecha_expedicion"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>
+                      Fecha de Expedición
+                      {process.env.NEXT_PUBLIC_FECHA_EXPEDICION_REQUIRED === 'true' && ' *'}
+                    </FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} disabled={loading} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-            <FormField
-              control={form.control}
-              name="profesion"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Profesión</FormLabel>
-                  <FormControl>
-                    <Input {...field} disabled={loading} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+              <FormField
+                control={form.control}
+                name="profesion"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Profesión</FormLabel>
+                    <FormControl>
+                      <Input {...field} disabled={loading} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-            <FormField
-              control={form.control}
-              name="numero_celular"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Número de Celular</FormLabel>
-                  <FormControl>
-                    <Input {...field} disabled={loading} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+              <FormField
+                control={form.control}
+                name="numero_celular"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Número de Celular</FormLabel>
+                    <FormControl>
+                      <Input {...field} disabled={loading} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
             <FormField
               control={form.control}
@@ -408,7 +410,7 @@ export function PersonaForm({
               )}
             />
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="departamento"
@@ -437,7 +439,7 @@ export function PersonaForm({
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="puesto_votacion_id"

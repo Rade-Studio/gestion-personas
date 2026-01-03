@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { requireCoordinadorOrAdmin, getCurrentProfile } from '@/lib/auth/helpers'
+import { requireCoordinadorOrAdmin, requireConsultorOrAdmin, getCurrentProfile } from '@/lib/auth/helpers'
 
 export async function GET(request: NextRequest) {
   try {
-    const profile = await requireCoordinadorOrAdmin()
+    // Permitir acceso a coordinadores, admins y consultores
+    let profile
+    try {
+      profile = await requireCoordinadorOrAdmin()
+    } catch {
+      profile = await requireConsultorOrAdmin()
+    }
     const supabase = await createClient()
 
     // Obtener líderes según el rol

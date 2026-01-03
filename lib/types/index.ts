@@ -1,5 +1,5 @@
 export type DocumentoTipo = 'CC' | 'CE' | 'Pasaporte' | 'TI' | 'Otro'
-export type UserRole = 'admin' | 'coordinador' | 'lider'
+export type UserRole = 'admin' | 'coordinador' | 'lider' | 'consultor'
 
 export interface Profile {
   id: string
@@ -15,6 +15,9 @@ export interface Profile {
   zona?: string
   candidato_id?: string
   coordinador_id?: string
+  puesto_votacion_id?: number
+  puesto_votacion?: PuestoVotacion
+  mesa_votacion?: string
   created_at: string
   updated_at: string
 }

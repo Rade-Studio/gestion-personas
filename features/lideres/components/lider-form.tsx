@@ -25,7 +25,7 @@ import {
 } from '@/components/ui/dialog'
 import { useAuth } from '@/features/auth/hooks/use-auth'
 import { Loader2 } from 'lucide-react'
-import type { Profile, Candidato } from '@/lib/types'
+import type { Profile, Candidato, PuestoVotacion } from '@/lib/types'
 
 interface LiderFormProps {
   open: boolean
@@ -45,8 +45,10 @@ export function LiderForm({
   const { profile: currentProfile, isCoordinador, isAdmin } = useAuth()
   const [candidatos, setCandidatos] = useState<Candidato[]>([])
   const [coordinadores, setCoordinadores] = useState<Profile[]>([])
+  const [puestosVotacion, setPuestosVotacion] = useState<PuestoVotacion[]>([])
   const [loadingCandidatos, setLoadingCandidatos] = useState(false)
   const [loadingCoordinadores, setLoadingCoordinadores] = useState(false)
+  const [loadingPuestos, setLoadingPuestos] = useState(false)
 
   const form = useForm<LiderFormData>({
     resolver: zodResolver(liderSchema),
@@ -62,8 +64,8 @@ export function LiderForm({
       zona: '',
       candidato_id: '',
       coordinador_id: '',
-      password: '',
-      email: '',
+      puesto_votacion_id: null,
+      mesa_votacion: '',
     },
   })
 
@@ -111,7 +113,24 @@ export function LiderForm({
         }
       }
 
+      // Load puestos de votación
+      const fetchPuestos = async () => {
+        setLoadingPuestos(true)
+        try {
+          const response = await fetch('/api/puestos-votacion')
+          const data = await response.json()
+          if (response.ok) {
+            setPuestosVotacion(data.data || [])
+          }
+        } catch (error) {
+          // Silently fail
+        } finally {
+          setLoadingPuestos(false)
+        }
+      }
+
       fetchCandidatos()
+      fetchPuestos()
       if (isAdmin) {
         fetchCoordinadores()
       }
@@ -126,14 +145,15 @@ export function LiderForm({
         tipo_documento: initialData.tipo_documento,
         numero_documento: initialData.numero_documento,
         fecha_nacimiento: initialData.fecha_nacimiento || '',
+        fecha_expedicion: '',
         telefono: initialData.telefono || '',
         departamento: initialData.departamento || '',
         municipio: initialData.municipio || '',
         zona: initialData.zona || '',
         candidato_id: initialData.candidato_id || '',
         coordinador_id: initialData.coordinador_id || '',
-        password: '',
-        email: '',
+        puesto_votacion_id: initialData.puesto_votacion_id || null,
+        mesa_votacion: initialData.mesa_votacion || '',
       })
     } else {
       form.reset({
@@ -142,14 +162,15 @@ export function LiderForm({
         tipo_documento: 'CC',
         numero_documento: '',
         fecha_nacimiento: '',
+        fecha_expedicion: '',
         telefono: '',
         departamento: '',
         municipio: '',
         zona: '',
         candidato_id: '',
         coordinador_id: '',
-        password: '',
-        email: '',
+        puesto_votacion_id: null,
+        mesa_votacion: '',
       })
     }
   }, [initialData, form])
@@ -167,7 +188,7 @@ export function LiderForm({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto sm:w-full md:max-w-3xl lg:max-w-4xl xl:max-w-5xl">
         <DialogHeader>
           <DialogTitle>
             {initialData ? 'Editar Líder' : 'Nuevo Líder'}
@@ -242,7 +263,7 @@ export function LiderForm({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="fecha_nacimiento">Fecha de Nacimiento</Label>
               <Input
@@ -257,11 +278,12 @@ export function LiderForm({
               <Input
                 id="telefono"
                 {...form.register('telefono')}
+                disabled={loading}
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label htmlFor="departamento">Departamento</Label>
               <Input
@@ -284,6 +306,47 @@ export function LiderForm({
                 id="zona"
                 {...form.register('zona')}
                 disabled={loading}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="puesto_votacion_id">Puesto de Votación</Label>
+              <Select
+                value={form.watch('puesto_votacion_id') != null ? form.watch('puesto_votacion_id')!.toString() : 'none'}
+                onValueChange={(value) => form.setValue('puesto_votacion_id', value === 'none' ? null : parseInt(value))}
+                disabled={loading || loadingPuestos}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={loadingPuestos ? 'Cargando...' : 'Seleccionar puesto'} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sin puesto</SelectItem>
+                  {puestosVotacion && puestosVotacion.length > 0
+                    ? puestosVotacion
+                        .filter((puesto) => puesto?.id != null && puesto.id !== undefined)
+                        .map((puesto) => {
+                          const idStr = String(puesto.id)
+                          if (!idStr || idStr.trim() === '') return null
+                          return (
+                            <SelectItem key={puesto.id} value={idStr}>
+                              {puesto.nombre}
+                            </SelectItem>
+                          )
+                        })
+                        .filter(Boolean)
+                    : null}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="mesa_votacion">Mesa de Votación</Label>
+              <Input
+                id="mesa_votacion"
+                {...form.register('mesa_votacion')}
+                disabled={loading}
+                placeholder="Ej: 1, 2, 3..."
               />
             </div>
           </div>
@@ -355,49 +418,6 @@ export function LiderForm({
             </>
           )}
 
-          {!initialData && (
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email (opcional)</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  {...form.register('email')}
-                  disabled={loading}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Si no se proporciona, se generará automáticamente
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">Contraseña (opcional)</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  {...form.register('password')}
-                  disabled={loading}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Si no se proporciona, se generará automáticamente
-                </p>
-              </div>
-            </div>
-          )}
-
-          {initialData && (
-            <div className="space-y-2">
-              <Label htmlFor="password">Nueva Contraseña (opcional)</Label>
-              <Input
-                id="password"
-                type="password"
-                {...form.register('password')}
-                disabled={loading}
-              />
-              <p className="text-xs text-muted-foreground">
-                Deje vacío para mantener la contraseña actual
-              </p>
-            </div>
-          )}
 
           <DialogFooter>
             <Button

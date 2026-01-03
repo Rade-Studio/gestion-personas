@@ -53,7 +53,6 @@ export default function CoordinadoresPage() {
   const [editingCoordinador, setEditingCoordinador] = useState<Profile | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [coordinadorToDelete, setCoordinadorToDelete] = useState<string | null>(null)
-  const [credentials, setCredentials] = useState<{ email: string; password: string } | null>(null)
 
   const fetchCoordinadores = async () => {
     setLoading(true)
@@ -107,14 +106,10 @@ export default function CoordinadoresPage() {
         throw new Error(result.error || 'Error al guardar coordinador')
       }
 
-      if (result.credentials) {
-        setCredentials(result.credentials)
-      } else {
-        toast.success(editingCoordinador ? 'Coordinador actualizado' : 'Coordinador creado')
-        setFormOpen(false)
-        setEditingCoordinador(null)
-        fetchCoordinadores()
-      }
+      toast.success(editingCoordinador ? 'Coordinador actualizado' : 'Coordinador creado')
+      setFormOpen(false)
+      setEditingCoordinador(null)
+      fetchCoordinadores()
     } catch (error: any) {
       toast.error(error.message)
       throw error
@@ -253,37 +248,6 @@ export default function CoordinadoresPage() {
           loading={saving}
         />
 
-        <Dialog open={!!credentials} onOpenChange={() => setCredentials(null)}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Coordinador Creado Exitosamente</DialogTitle>
-              <DialogDescription>
-                Guarde estas credenciales para el nuevo coordinador
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Email</Label>
-                <Input value={credentials?.email || ''} readOnly />
-              </div>
-              <div className="space-y-2">
-                <Label>Contraseña</Label>
-                <Input value={credentials?.password || ''} readOnly />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button
-                onClick={() => {
-                  setCredentials(null)
-                  setFormOpen(false)
-                  fetchCoordinadores()
-                }}
-              >
-                Cerrar
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
 
         {/* Delete Confirmation Dialog */}
         <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

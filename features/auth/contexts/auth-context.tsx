@@ -14,6 +14,7 @@ interface AuthContextType {
   isAdmin: boolean
   isCoordinador: boolean
   isLider: boolean
+  isConsultor: boolean
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -141,6 +142,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isAdmin = useMemo(() => profile?.role === 'admin', [profile?.role])
   const isCoordinador = useMemo(() => profile?.role === 'coordinador', [profile?.role])
   const isLider = useMemo(() => profile?.role === 'lider', [profile?.role])
+  const isConsultor = useMemo(() => profile?.role === 'consultor', [profile?.role])
 
   const value = useMemo(
     () => ({
@@ -152,8 +154,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isAdmin,
       isCoordinador,
       isLider,
+      isConsultor,
     }),
-    [user, profile, loading, isAdmin, isCoordinador, isLider]
+    [user, profile, loading, isAdmin, isCoordinador, isLider, isConsultor]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { requireLiderOrAdmin, getCurrentProfile, requireCoordinadorOrAdmin } from '@/lib/auth/helpers'
+import { requireLiderOrAdmin, getCurrentProfile, requireCoordinadorOrAdmin, requireConsultorOrAdmin } from '@/lib/auth/helpers'
 import { personaSchema } from '@/features/personas/validations/persona'
 import {
   isDocumentValidationEnabled,
@@ -11,7 +11,13 @@ import {
 
 export async function GET(request: NextRequest) {
   try {
-    const profile = await requireLiderOrAdmin()
+    // Permitir GET a consultores también
+    let profile
+    try {
+      profile = await requireLiderOrAdmin()
+    } catch {
+      profile = await requireConsultorOrAdmin()
+    }
     const supabase = await createClient()
 
     const searchParams = request.nextUrl.searchParams

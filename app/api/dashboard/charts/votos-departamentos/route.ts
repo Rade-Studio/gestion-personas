@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { requireAdmin } from '@/lib/auth/helpers'
+import { requireAdmin, requireConsultorOrAdmin } from '@/lib/auth/helpers'
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAdmin()
+    // Permitir acceso a admins y consultores
+    try {
+      await requireAdmin()
+    } catch {
+      await requireConsultorOrAdmin()
+    }
     const supabase = await createClient()
 
     // Obtener votos confirmados con información de departamento y municipio de la persona
