@@ -309,7 +309,7 @@ export function CoordinadorForm({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="departamento">Departamento</Label>
               <Input
@@ -323,13 +323,6 @@ export function CoordinadorForm({
               <Input
                 id="municipio"
                 {...form.register('municipio')}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="zona">Zona</Label>
-              <Input
-                id="zona"
-                {...form.register('zona')}
                 disabled={loading}
               />
             </div>

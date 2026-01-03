@@ -48,6 +48,11 @@ export function PersonaForm({
   const [loadingPuestos, setLoadingPuestos] = useState(false)
   const [isDataLoaded, setIsDataLoaded] = useState(false)
 
+  // Configuración de valores por defecto
+  const useDefaultLocation = process.env.NEXT_PUBLIC_USE_DEFAULT_LOCATION === 'true'
+  const defaultDepartamento = process.env.NEXT_PUBLIC_DEFAULT_DEPARTAMENTO || 'Atlántico'
+  const defaultMunicipio = process.env.NEXT_PUBLIC_DEFAULT_MUNICIPIO || 'Soledad'
+
   const form = useForm<PersonaFormData>({
     resolver: zodResolver(personaSchema),
     defaultValues: {
@@ -62,8 +67,8 @@ export function PersonaForm({
       direccion: '',
       barrio_id: undefined,
       barrio: '',
-      departamento: '',
-      municipio: '',
+      departamento: useDefaultLocation ? defaultDepartamento : '',
+      municipio: useDefaultLocation ? defaultMunicipio : '',
       puesto_votacion_id: undefined,
       puesto_votacion: '',
       mesa_votacion: '',
@@ -131,8 +136,8 @@ export function PersonaForm({
         direccion: initialData.direccion || '',
         barrio_id: barrioId,
         barrio: typeof initialData.barrio === 'string' ? initialData.barrio : (initialData.barrio as any)?.nombre || '',
-        departamento: initialData.departamento || '',
-        municipio: initialData.municipio || '',
+        departamento: initialData.departamento || (useDefaultLocation ? defaultDepartamento : ''),
+        municipio: initialData.municipio || (useDefaultLocation ? defaultMunicipio : ''),
         puesto_votacion_id: puestoVotacionId,
         puesto_votacion: typeof initialData.puesto_votacion === 'string' ? initialData.puesto_votacion : (initialData.puesto_votacion as any)?.nombre || '',
         mesa_votacion: initialData.mesa_votacion || '',
@@ -150,8 +155,8 @@ export function PersonaForm({
         direccion: '',
         barrio_id: undefined,
         barrio: '',
-        departamento: '',
-        municipio: '',
+        departamento: useDefaultLocation ? defaultDepartamento : '',
+        municipio: useDefaultLocation ? defaultMunicipio : '',
         puesto_votacion_id: undefined,
         puesto_votacion: '',
         mesa_votacion: '',
@@ -418,7 +423,7 @@ export function PersonaForm({
                   <FormItem>
                     <FormLabel>Departamento</FormLabel>
                     <FormControl>
-                      <Input {...field} disabled={loading} />
+                      <Input {...field} disabled={loading || useDefaultLocation} readOnly={useDefaultLocation} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -431,7 +436,7 @@ export function PersonaForm({
                   <FormItem>
                     <FormLabel>Municipio</FormLabel>
                     <FormControl>
-                      <Input {...field} disabled={loading} />
+                      <Input {...field} disabled={loading || useDefaultLocation} readOnly={useDefaultLocation} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

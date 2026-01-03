@@ -50,6 +50,11 @@ export function LiderForm({
   const [loadingCoordinadores, setLoadingCoordinadores] = useState(false)
   const [loadingPuestos, setLoadingPuestos] = useState(false)
 
+  // Configuración de valores por defecto
+  const useDefaultLocation = process.env.NEXT_PUBLIC_USE_DEFAULT_LOCATION === 'true'
+  const defaultDepartamento = process.env.NEXT_PUBLIC_DEFAULT_DEPARTAMENTO || 'Atlántico'
+  const defaultMunicipio = process.env.NEXT_PUBLIC_DEFAULT_MUNICIPIO || 'Soledad'
+
   const form = useForm<LiderFormData>({
     resolver: zodResolver(liderSchema),
     defaultValues: {
@@ -59,8 +64,8 @@ export function LiderForm({
       numero_documento: '',
       fecha_nacimiento: '',
       telefono: '',
-      departamento: '',
-      municipio: '',
+      departamento: useDefaultLocation ? defaultDepartamento : '',
+      municipio: useDefaultLocation ? defaultMunicipio : '',
       zona: '',
       candidato_id: '',
       coordinador_id: '',
@@ -147,8 +152,8 @@ export function LiderForm({
         fecha_nacimiento: initialData.fecha_nacimiento || '',
         fecha_expedicion: '',
         telefono: initialData.telefono || '',
-        departamento: initialData.departamento || '',
-        municipio: initialData.municipio || '',
+        departamento: initialData.departamento || (useDefaultLocation ? defaultDepartamento : ''),
+        municipio: initialData.municipio || (useDefaultLocation ? defaultMunicipio : ''),
         zona: initialData.zona || '',
         candidato_id: initialData.candidato_id || '',
         coordinador_id: initialData.coordinador_id || '',
@@ -164,8 +169,8 @@ export function LiderForm({
         fecha_nacimiento: '',
         fecha_expedicion: '',
         telefono: '',
-        departamento: '',
-        municipio: '',
+        departamento: useDefaultLocation ? defaultDepartamento : '',
+        municipio: useDefaultLocation ? defaultMunicipio : '',
         zona: '',
         candidato_id: '',
         coordinador_id: '',
@@ -283,13 +288,14 @@ export function LiderForm({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="departamento">Departamento</Label>
               <Input
                 id="departamento"
                 {...form.register('departamento')}
-                disabled={loading}
+                disabled={loading || useDefaultLocation}
+                readOnly={useDefaultLocation}
               />
             </div>
             <div className="space-y-2">
@@ -297,15 +303,8 @@ export function LiderForm({
               <Input
                 id="municipio"
                 {...form.register('municipio')}
-                disabled={loading}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="zona">Zona</Label>
-              <Input
-                id="zona"
-                {...form.register('zona')}
-                disabled={loading}
+                disabled={loading || useDefaultLocation}
+                readOnly={useDefaultLocation}
               />
             </div>
           </div>

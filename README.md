@@ -39,6 +39,11 @@ POCKETBASE_PASSWORD=tu_contraseña_de_pocketbase
 
 # Fecha de Expedición (Opcional)
 FECHA_EXPEDICION_REQUIRED=false
+
+# Ubicación por Defecto (Opcional)
+NEXT_PUBLIC_USE_DEFAULT_LOCATION=false
+NEXT_PUBLIC_DEFAULT_DEPARTAMENTO=Atlántico
+NEXT_PUBLIC_DEFAULT_MUNICIPIO=Soledad
 ```
 
 **Importante**: La `SUPABASE_SERVICE_ROLE_KEY` es necesaria para crear usuarios (líderes) desde el panel de administración. Puedes encontrarla en tu dashboard de Supabase en **Settings > API > service_role key**. **Nunca expongas esta clave en el cliente**, solo úsala en el servidor.
