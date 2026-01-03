@@ -9,6 +9,7 @@ export const liderSchema = z.object({
   }),
   numero_documento: z.string().min(1, 'El número de documento es obligatorio'),
   fecha_nacimiento: z.string().optional().or(z.literal('')),
+  fecha_expedicion: z.string().optional().or(z.literal('')),
   telefono: z.string().optional().or(z.literal('')),
   departamento: z.string().optional().or(z.literal('')),
   municipio: z.string().optional().or(z.literal('')),
