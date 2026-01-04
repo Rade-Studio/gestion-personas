@@ -38,7 +38,7 @@ import { useAuth } from '@/features/auth/hooks/use-auth'
 import { Loader2 } from 'lucide-react'
 
 export default function PersonasPage() {
-  const { profile } = useAuth()
+  const { profile, isConsultor } = useAuth()
   const [personas, setPersonas] = useState<PersonaWithConfirmacion[]>([])
   const [loading, setLoading] = useState(true)
   const [formOpen, setFormOpen] = useState(false)
@@ -156,8 +156,8 @@ export default function PersonasPage() {
         setMesasVotacion(mesas)
       }
 
-      // Cargar líderes si es admin o coordinador
-      if (profile?.role === 'admin' || profile?.role === 'coordinador') {
+      // Cargar líderes si es admin, coordinador o consultor
+      if (profile?.role === 'admin' || profile?.role === 'coordinador' || profile?.role === 'consultor') {
         try {
           const lideresResponse = await fetch('/api/lideres')
           const lideresData = await lideresResponse.json()
@@ -178,8 +178,8 @@ export default function PersonasPage() {
         setLideres([])
       }
 
-      // Cargar coordinadores solo si es admin
-      if (profile?.role === 'admin') {
+      // Cargar coordinadores si es admin o consultor
+      if (profile?.role === 'admin' || profile?.role === 'consultor') {
         try {
           const coordinadoresResponse = await fetch('/api/coordinadores')
           const coordinadoresData = await coordinadoresResponse.json()
@@ -605,14 +605,18 @@ export default function PersonasPage() {
               <Download className="h-4 w-4 mr-2" />
               Exportar
             </Button>
-            <Button variant="outline" onClick={() => setImportOpen(true)} size="sm">
-              <Upload className="h-4 w-4 mr-2" />
-              Importar
-            </Button>
-            <Button onClick={handleCreate} size="sm">
-              <Plus className="h-4 w-4 mr-2" />
-              Nueva Persona
-            </Button>
+            {!isConsultor && (
+              <>
+                <Button variant="outline" onClick={() => setImportOpen(true)} size="sm">
+                  <Upload className="h-4 w-4 mr-2" />
+                  Importar
+                </Button>
+                <Button onClick={handleCreate} size="sm">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Nueva Persona
+                </Button>
+              </>
+            )}
           </div>
         </div>
 
@@ -710,8 +714,8 @@ export default function PersonasPage() {
           puestosVotacion={puestosVotacion}
           barrios={barrios}
           mesasVotacion={[]}
-          lideres={(profile?.role === 'admin' || profile?.role === 'coordinador') ? lideres : undefined}
-          coordinadores={profile?.role === 'admin' ? coordinadores : undefined}
+          lideres={(profile?.role === 'admin' || profile?.role === 'coordinador' || profile?.role === 'consultor') ? lideres : undefined}
+          coordinadores={(profile?.role === 'admin' || profile?.role === 'consultor') ? coordinadores : undefined}
         />
 
         {/* Table */}
@@ -756,141 +760,151 @@ export default function PersonasPage() {
         </Card>
       </div>
 
-      <PersonaForm
-        open={formOpen}
-        onOpenChange={(open) => {
-          if (!saving) {
-            setFormOpen(open)
+      {!isConsultor && (
+        <PersonaForm
+          open={formOpen}
+          onOpenChange={(open) => {
+            if (!saving) {
+              setFormOpen(open)
+              if (!open) {
+                setEditingPersona(null)
+              }
+            }
+          }}
+          onSubmit={handleSubmit}
+          initialData={editingPersona || undefined}
+          loading={saving}
+        />
+      )}
+
+      {!isConsultor && (
+        <ConfirmarActividadDialog
+          open={confirmActividadOpen}
+          onOpenChange={setConfirmActividadOpen}
+          persona={confirmingPersona}
+          onConfirm={handleConfirmVoto}
+        />
+      )}
+
+      {!isConsultor && (
+        <Dialog open={importOpen} onOpenChange={(open) => {
+          if (!importing) {
+            setImportOpen(open)
             if (!open) {
-              setEditingPersona(null)
+              setImportFile(null)
+              setImportProgress(0)
             }
           }
-        }}
-        onSubmit={handleSubmit}
-        initialData={editingPersona || undefined}
-        loading={saving}
-      />
-
-      <ConfirmarActividadDialog
-        open={confirmActividadOpen}
-        onOpenChange={setConfirmActividadOpen}
-        persona={confirmingPersona}
-        onConfirm={handleConfirmVoto}
-      />
-
-      <Dialog open={importOpen} onOpenChange={(open) => {
-        if (!importing) {
-          setImportOpen(open)
-          if (!open) {
-            setImportFile(null)
-            setImportProgress(0)
-          }
-        }
-      }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Importar Personas</DialogTitle>
-            <DialogDescription>
-              Seleccione el archivo Excel con los datos de las personas
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="file">Archivo Excel</Label>
-              <Input
-                id="file"
-                type="file"
-                accept=".xlsx,.xls"
-                onChange={(e) => setImportFile(e.target.files?.[0] || null)}
-                disabled={importing}
-              />
-            </div>
-
-            {importing && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Importando registros...</span>
-                  <span className="font-medium">{importProgress}%</span>
-                </div>
-                <Progress value={importProgress} className="h-2" />
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>Procesando archivo, por favor espere...</span>
-                </div>
+        }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Importar Personas</DialogTitle>
+              <DialogDescription>
+                Seleccione el archivo Excel con los datos de las personas
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="file">Archivo Excel</Label>
+                <Input
+                  id="file"
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                  disabled={importing}
+                />
               </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button 
-              variant="outline" 
-              onClick={() => {
-                setImportOpen(false)
-                setImportFile(null)
-                setImportProgress(0)
-              }}
-              disabled={importing}
-            >
-              Cancelar
-            </Button>
-            <Button 
-              onClick={handleImportFile} 
-              disabled={!importFile || importing}
-            >
-              {importing ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Importando...
-                </>
-              ) : (
-                'Importar'
+
+              {importing && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Importando registros...</span>
+                    <span className="font-medium">{importProgress}%</span>
+                  </div>
+                  <Progress value={importProgress} className="h-2" />
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Procesando archivo, por favor espere...</span>
+                  </div>
+                </div>
               )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </div>
+            <DialogFooter>
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setImportOpen(false)
+                  setImportFile(null)
+                  setImportProgress(0)
+                }}
+                disabled={importing}
+              >
+                Cancelar
+              </Button>
+              <Button 
+                onClick={handleImportFile} 
+                disabled={!importFile || importing}
+              >
+                {importing ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Importando...
+                  </>
+                ) : (
+                  'Importar'
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Delete Confirmation Dialog */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>¿Eliminar persona?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Esta acción no se puede deshacer. Se eliminará permanentemente la información de esta persona.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setPersonaToDelete(null)}>
-              Cancelar
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Eliminar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {!isConsultor && (
+        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>¿Eliminar persona?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Esta acción no se puede deshacer. Se eliminará permanentemente la información de esta persona.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setPersonaToDelete(null)}>
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDelete}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Eliminar
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
 
       {/* Reversar Voto Confirmation Dialog */}
-      <AlertDialog open={reversarDialogOpen} onOpenChange={setReversarDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>¿Reversar confirmación de actividad?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Esta acción marcará la confirmación de actividad como reversada. La persona volverá a aparecer como pendiente.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setPersonaToReversar(null)}>
-              Cancelar
-            </AlertDialogCancel>
-            <AlertDialogAction onClick={handleReversarVoto}>
-              Reversar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {!isConsultor && (
+        <AlertDialog open={reversarDialogOpen} onOpenChange={setReversarDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>¿Reversar confirmación de actividad?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Esta acción marcará la confirmación de actividad como reversada. La persona volverá a aparecer como pendiente.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setPersonaToReversar(null)}>
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction onClick={handleReversarVoto}>
+                Reversar
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
 
       {/* Import Report Dialog */}
       <Dialog open={importReportOpen} onOpenChange={setImportReportOpen}>
