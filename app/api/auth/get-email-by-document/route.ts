@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
     // Buscar el perfil por número de documento
     const { data: profile, error: profileError } = await adminClient
       .from('profiles')
-      .select('numero_documento')
+      .select('id, numero_documento')
       .eq('numero_documento', numero_documento)
       .single()
 
@@ -29,8 +29,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Construir el email automático
-    const email = `${numero_documento}@sistema.local`
+    // Obtener el email real del usuario desde auth.users usando el ID del profile
+    const { data: authUser, error: authUserError } = await adminClient.auth.admin.getUserById(profile.id)
+
+    if (authUserError || !authUser?.user?.email) {
+      return NextResponse.json(
+        { error: 'No se pudo obtener el email del usuario' },
+        { status: 404 }
+      )
+    }
+
+    const email = authUser.user.email
 
     return NextResponse.json({ email })
   } catch (error: any) {

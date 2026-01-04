@@ -2,6 +2,17 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { Profile } from '@/lib/types'
 
+/**
+ * Genera el email automático basado en el número de documento
+ * Usa la variable de entorno SYSTEM_EMAIL_DOMAIN o '@sistema.local' por defecto
+ */
+export function generateSystemEmail(numeroDocumento: string): string {
+  const domain = process.env.SYSTEM_EMAIL_DOMAIN || '@sistema.local'
+  // Asegurar que el dominio comience con @
+  const emailDomain = domain.startsWith('@') ? domain : `@${domain}`
+  return `${numeroDocumento}${emailDomain}`
+}
+
 export async function getCurrentUser() {
   const supabase = await createClient()
   const {

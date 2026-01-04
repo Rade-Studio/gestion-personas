@@ -15,11 +15,11 @@ export async function POST(request: NextRequest) {
     const isEmail = validatedData.email.includes('@')
     let emailToUse = validatedData.email
 
-    // Si no es email, buscar el email asociado al número de documento
+    // Si no es email, buscar el email real asociado al número de documento
     if (!isEmail) {
       const { data: profile } = await adminClient
         .from('profiles')
-        .select('numero_documento')
+        .select('id, numero_documento')
         .eq('numero_documento', validatedData.email)
         .single()
 
@@ -30,8 +30,17 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      // Construir el email automático
-      emailToUse = `${validatedData.email}@sistema.local`
+      // Obtener el email real del usuario desde auth.users usando el ID del profile
+      const { data: authUser, error: authUserError } = await adminClient.auth.admin.getUserById(profile.id)
+
+      if (authUserError || !authUser?.user?.email) {
+        return NextResponse.json(
+          { error: 'No se pudo obtener el email del usuario' },
+          { status: 401 }
+        )
+      }
+
+      emailToUse = authUser.user.email
     }
 
     // Intentar login con el email encontrado o proporcionado

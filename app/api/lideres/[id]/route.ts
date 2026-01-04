@@ -108,7 +108,7 @@ export async function PUT(
 
       // Si cambió el número de documento, actualizar email y contraseña
       const adminClient = createAdminClient()
-      const newEmail = `${validatedData.numero_documento}@sistema.local`
+      const newEmail = generateSystemEmail(validatedData.numero_documento)
       const { error: updateAuthError } = await adminClient.auth.admin.updateUserById(id, {
         email: newEmail,
         password: validatedData.numero_documento,

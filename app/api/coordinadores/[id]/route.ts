@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { requireAdmin, requireConsultorOrAdmin } from '@/lib/auth/helpers'
+import { requireAdmin, requireConsultorOrAdmin, generateSystemEmail } from '@/lib/auth/helpers'
 import { coordinadorSchema } from '@/features/coordinadores/validations/coordinador'
 
 export async function GET(
@@ -90,7 +90,7 @@ export async function PUT(
 
       // Si cambió el número de documento, actualizar email y contraseña
       const adminClient = createAdminClient()
-      const newEmail = `${validatedData.numero_documento}@sistema.local`
+      const newEmail = generateSystemEmail(validatedData.numero_documento)
       const { error: updateAuthError } = await adminClient.auth.admin.updateUserById(id, {
         email: newEmail,
         password: validatedData.numero_documento,

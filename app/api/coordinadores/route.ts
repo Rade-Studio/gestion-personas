@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { requireAdmin, requireConsultorOrAdmin } from '@/lib/auth/helpers'
+import { requireAdmin, requireConsultorOrAdmin, generateSystemEmail } from '@/lib/auth/helpers'
 import { coordinadorSchema } from '@/features/coordinadores/validations/coordinador'
 
 export async function GET(request: NextRequest) {
@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Email y contraseña automáticos basados en número de documento
-    const email = `${validatedData.numero_documento}@sistema.local`
+    const email = generateSystemEmail(validatedData.numero_documento)
     const password = validatedData.numero_documento
 
     // Get default candidate if candidato_id not provided
