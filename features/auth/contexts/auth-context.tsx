@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState, useMemo } from 'react'
+import { createContext, useContext, useEffect, useState, useMemo, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { User } from '@supabase/supabase-js'
 import type { Profile } from '@/lib/types'
@@ -24,6 +24,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
+  const signOutInProgressRef = useRef(false)
 
   useEffect(() => {
     let mounted = true
@@ -88,13 +89,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       } else {
         setProfile(null)
-        // Si el evento es SIGNED_OUT y estamos en una página protegida, redirigir
-        if (event === 'SIGNED_OUT' && typeof window !== 'undefined') {
-          const currentPath = window.location.pathname
-          if (!currentPath.startsWith('/auth/login') && !currentPath.startsWith('/login')) {
-            window.location.href = '/auth/login'
-          }
-        }
+        // No redirigir automáticamente aquí para evitar conflictos con la redirección
+        // manejada en main-layout.tsx. El logout debe ser manejado explícitamente.
       }
     })
 
@@ -105,12 +101,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [supabase])
 
   const signOut = async () => {
+    // Protección contra múltiples llamadas simultáneas
+    if (signOutInProgressRef.current) {
+      return
+    }
+
+    signOutInProgressRef.current = true
+
     try {
-      const { error } = await supabase.auth.signOut()
+      // Timeout de 2 segundos para evitar bloqueos
+      const signOutPromise = Promise.race([
+        supabase.auth.signOut(),
+        new Promise<{ error: null }>((resolve) => 
+          setTimeout(() => resolve({ error: null }), 2000)
+        )
+      ])
+
+      const { error } = await signOutPromise
+      
       if (error) {
         console.error('Error al cerrar sesión:', error)
-        throw error
       }
+      
+      // Limpiar estado local siempre, incluso si hay error
       setUser(null)
       setProfile(null)
     } catch (error) {
@@ -118,7 +131,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Aún así limpiamos el estado local
       setUser(null)
       setProfile(null)
-      throw error
+    } finally {
+      // Resetear el flag después de un pequeño delay para permitir que se complete
+      setTimeout(() => {
+        signOutInProgressRef.current = false
+      }, 100)
     }
   }
 
