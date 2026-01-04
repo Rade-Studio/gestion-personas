@@ -42,7 +42,7 @@ export function PersonasFilters({
   lideres,
   coordinadores,
 }: PersonasFiltersProps) {
-  const { isAdmin, isCoordinador } = useAuth()
+  const { isAdmin, isCoordinador, isConsultor } = useAuth()
   const [filters, setFilters] = useState<{
     puesto_votacion: string[] | undefined
     barrio_id: string[] | undefined
@@ -185,9 +185,9 @@ export function PersonasFilters({
           )}
         </div>
         <div className={`grid grid-cols-1 md:grid-cols-2 gap-x-2 gap-y-3 ${
-          isAdmin && coordinadores
+          (isAdmin || isConsultor) && coordinadores
             ? 'lg:grid-cols-6' 
-            : (isAdmin || isCoordinador) && lideres
+            : ((isAdmin || isCoordinador || isConsultor) && lideres)
             ? 'lg:grid-cols-5'
             : 'lg:grid-cols-4'
         }`}>
@@ -386,7 +386,7 @@ export function PersonasFilters({
             </Select>
           </div>
 
-          {(isAdmin || isCoordinador) && lideres && (
+          {(isAdmin || isCoordinador || isConsultor) && lideres && (
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-muted-foreground">Líder</Label>
               <Select
@@ -449,7 +449,7 @@ export function PersonasFilters({
             </div>
           )}
 
-          {isAdmin && coordinadores && (
+          {(isAdmin || isConsultor) && coordinadores && (
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-muted-foreground">Coordinador</Label>
               <Select

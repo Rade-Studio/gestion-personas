@@ -29,6 +29,7 @@ import type { PersonaWithConfirmacion, PuestoVotacion } from '@/lib/types'
 import { getPersonaEstado } from '@/features/personas/utils/persona-estado'
 import Image from 'next/image'
 import { AlertCircle } from 'lucide-react'
+import { useAuth } from '@/features/auth/hooks/use-auth'
 
 interface PersonasTableProps {
   personas: PersonaWithConfirmacion[]
@@ -53,6 +54,7 @@ export function PersonasTable({
   onReversarVoto,
   loading = false,
 }: PersonasTableProps) {
+  const { isConsultor } = useAuth()
   const [viewingImage, setViewingImage] = useState<string | null>(null)
 
   const isConfirmed = (persona: PersonaWithConfirmacion) => {
@@ -193,38 +195,42 @@ export function PersonasTable({
                               Ver Imagen
                             </DropdownMenuItem>
                           )}
-                          {getPersonaEstado(persona) === 'pending' && (
-                            <DropdownMenuItem 
-                              onClick={() => onConfirmVoto(persona)}
-                              className="cursor-pointer"
-                            >
-                              <CheckCircle2 className="mr-2 h-4 w-4" />
-                              Confirmar Actividad
-                            </DropdownMenuItem>
+                          {!isConsultor && (
+                            <>
+                              {getPersonaEstado(persona) === 'pending' && (
+                                <DropdownMenuItem 
+                                  onClick={() => onConfirmVoto(persona)}
+                                  className="cursor-pointer"
+                                >
+                                  <CheckCircle2 className="mr-2 h-4 w-4" />
+                                  Confirmar Actividad
+                                </DropdownMenuItem>
+                              )}
+                              {isConfirmed(persona) && (
+                                <DropdownMenuItem 
+                                  onClick={() => onReversarVoto(persona)}
+                                  className="cursor-pointer"
+                                >
+                                  <XCircle className="mr-2 h-4 w-4" />
+                                  Reversar Confirmación
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuItem 
+                                onClick={() => onEdit(persona)}
+                                className="cursor-pointer"
+                              >
+                                <Edit className="mr-2 h-4 w-4" />
+                                Editar
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => onDelete(persona.id)}
+                                className="text-destructive focus:text-destructive cursor-pointer"
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Eliminar
+                              </DropdownMenuItem>
+                            </>
                           )}
-                          {isConfirmed(persona) && (
-                            <DropdownMenuItem 
-                              onClick={() => onReversarVoto(persona)}
-                              className="cursor-pointer"
-                            >
-                              <XCircle className="mr-2 h-4 w-4" />
-                              Reversar Confirmación
-                            </DropdownMenuItem>
-                          )}
-                          <DropdownMenuItem 
-                            onClick={() => onEdit(persona)}
-                            className="cursor-pointer"
-                          >
-                            <Edit className="mr-2 h-4 w-4" />
-                            Editar
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => onDelete(persona.id)}
-                            className="text-destructive focus:text-destructive cursor-pointer"
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Eliminar
-                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>

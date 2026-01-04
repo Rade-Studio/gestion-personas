@@ -8,6 +8,15 @@ export async function POST(
 ) {
   try {
     const profile = await requireLiderOrAdmin()
+    
+    // Bloquear consultores de reversar confirmaciones
+    if (profile.role === 'consultor') {
+      return NextResponse.json(
+        { error: 'No autorizado: los consultores no pueden reversar confirmaciones' },
+        { status: 403 }
+      )
+    }
+    
     const { id } = await params
     const supabase = await createClient()
 

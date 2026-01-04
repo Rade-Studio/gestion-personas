@@ -1,8 +1,9 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useRef } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { useAuth } from '@/features/auth/hooks/use-auth'
+import { clearSupabaseStorage } from '@/lib/auth/client-helpers'
 import {
   Sidebar,
   SidebarContent,
@@ -41,33 +42,53 @@ export function MainLayout({ children }: MainLayoutProps) {
   const pathname = usePathname()
   const { profile, signOut, isAdmin, isCoordinador } = useAuth()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const isLoggingOutRef = useRef(false)
 
   const handleSignOut = async () => {
+    // Protección contra múltiples clicks
+    if (isLoggingOutRef.current) {
+      return
+    }
+
+    isLoggingOutRef.current = true
     setIsLoggingOut(true)
     
-    // Crear un timeout máximo de 3 segundos para evitar que se quede colgado
+    // Timeout máximo de 5 segundos para navegadores más lentos
     const maxTimeout = setTimeout(() => {
       console.warn('Timeout al cerrar sesión, redirigiendo de todas formas')
       if (typeof window !== 'undefined') {
+        clearSupabaseStorage()
         window.location.href = '/auth/login'
       }
-    }, 3000)
+    }, 5000)
     
     try {
+      // Limpiar estado local inmediatamente
+      if (typeof window !== 'undefined') {
+        clearSupabaseStorage()
+      }
+
       // Crear un AbortController para cancelar las peticiones si es necesario
       const abortController = new AbortController()
       
-      // Primero llamamos al endpoint del servidor para limpiar cookies
-      const logoutPromise = fetch('/api/auth/logout', {
-        method: 'POST',
-        signal: abortController.signal,
-      }).catch((error) => {
+      // Endpoint del servidor con timeout agresivo de 2 segundos
+      const logoutPromise = Promise.race([
+        fetch('/api/auth/logout', {
+          method: 'POST',
+          signal: abortController.signal,
+          cache: 'no-store',
+        }),
+        new Promise<Response>((resolve) => 
+          setTimeout(() => resolve(new Response(JSON.stringify({ success: true }), { status: 200 })), 2000)
+        )
+      ]).catch((error) => {
         if (error.name !== 'AbortError') {
           console.error('Error al cerrar sesión en servidor:', error)
         }
+        return new Response(JSON.stringify({ success: false }), { status: 500 })
       })
       
-      // Luego cerramos sesión en el cliente (con timeout propio)
+      // Cerrar sesión en el cliente con timeout de 2 segundos
       const signOutPromise = Promise.race([
         signOut(),
         new Promise<void>((resolve) => setTimeout(() => resolve(), 2000))
@@ -75,36 +96,26 @@ export function MainLayout({ children }: MainLayoutProps) {
         console.error('Error al cerrar sesión en cliente:', error)
       })
       
-      // Ejecutar ambas operaciones en paralelo, pero no esperar más de lo necesario
-      await Promise.allSettled([logoutPromise, signOutPromise])
+      // Ejecutar ambas operaciones en paralelo, pero no bloquear la redirección
+      Promise.allSettled([logoutPromise, signOutPromise]).finally(() => {
+        clearTimeout(maxTimeout)
+      })
       
-      // Limpiar el timeout si todo salió bien
-      clearTimeout(maxTimeout)
-      
-      // Limpiar cookies del cliente manualmente
-      if (typeof document !== 'undefined') {
-        const cookies = document.cookie.split(';')
-        cookies.forEach((cookie) => {
-          const eqPos = cookie.indexOf('=')
-          const name = eqPos > -1 ? cookie.substr(0, eqPos).trim() : cookie.trim()
-          if (name.startsWith('sb-') || name.includes('supabase')) {
-            const domain = window.location.hostname
-            document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`
-            document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=${domain}`
-            document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=.${domain}`
-          }
-        })
-      }
-      
-      // Redirigir inmediatamente
+      // Redirigir inmediatamente después de limpiar estado local
+      // No esperar respuesta del servidor para evitar bloqueos
       if (typeof window !== 'undefined') {
-        window.location.href = '/auth/login'
+        // Pequeño delay para asegurar que la limpieza se complete
+        setTimeout(() => {
+          window.location.href = '/auth/login'
+        }, 100)
       }
     } catch (error: any) {
       clearTimeout(maxTimeout)
       console.error('Error al cerrar sesión:', error)
-      // Aún así redirigir con recarga completa
+      
+      // Asegurar limpieza completa antes de redirigir
       if (typeof window !== 'undefined') {
+        clearSupabaseStorage()
         window.location.href = '/auth/login'
       }
     }

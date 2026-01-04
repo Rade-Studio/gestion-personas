@@ -44,6 +44,12 @@ FECHA_EXPEDICION_REQUIRED=false
 NEXT_PUBLIC_USE_DEFAULT_LOCATION=false
 NEXT_PUBLIC_DEFAULT_DEPARTAMENTO=Atlántico
 NEXT_PUBLIC_DEFAULT_MUNICIPIO=Soledad
+
+# Dominio del correo electrónico del sistema
+# Los correos se generan automáticamente como: {numero_documento}{SYSTEM_EMAIL_DOMAIN}
+# Ejemplo: si SYSTEM_EMAIL_DOMAIN=@sistema.local y numero_documento=1234567890
+# El correo será: 1234567890@sistema.local
+SYSTEM_EMAIL_DOMAIN=@sistema.local
 ```
 
 **Importante**: La `SUPABASE_SERVICE_ROLE_KEY` es necesaria para crear usuarios (líderes) desde el panel de administración. Puedes encontrarla en tu dashboard de Supabase en **Settings > API > service_role key**. **Nunca expongas esta clave en el cliente**, solo úsala en el servidor.

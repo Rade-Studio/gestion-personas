@@ -5,6 +5,14 @@ import { requireLiderOrAdmin, getCurrentProfile } from '@/lib/auth/helpers'
 export async function POST(request: NextRequest) {
   try {
     const profile = await requireLiderOrAdmin()
+    
+    // Bloquear consultores de confirmar actividades
+    if (profile.role === 'consultor') {
+      return NextResponse.json(
+        { error: 'No autorizado: los consultores no pueden confirmar actividades' },
+        { status: 403 }
+      )
+    }
     const supabase = await createClient()
 
     const formData = await request.formData()
