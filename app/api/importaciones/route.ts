@@ -98,33 +98,13 @@ export async function POST(request: NextRequest) {
       return ''
     }
 
-    // Helper function to normalize tipo_documento
-    const normalizeTipoDocumento = (value: string): string => {
-      if (!value) return 'CC'
-      const normalized = value.trim()
-      // Normalizar variaciones comunes
-      const tipoMap: Record<string, string> = {
-        'CC': 'CC',
-        'C.C': 'CC',
-        'C.C.': 'CC',
-        'Cedula': 'CC',
-        'Cédula': 'CC',
-        'Cedula de Ciudadania': 'CC',
-        'Cédula de Ciudadanía': 'CC',
-        'CE': 'CE',
-        'C.E': 'CE',
-        'C.E.': 'CE',
-        'Cedula de Extranjeria': 'CE',
-        'Cédula de Extranjería': 'CE',
-        'Pasaporte': 'Pasaporte',
-        'TI': 'TI',
-        'T.I': 'TI',
-        'T.I.': 'TI',
-        'Tarjeta de Identidad': 'TI',
-        'Otro': 'Otro',
-      }
-      return tipoMap[normalized] || normalized
-    }
+    // Configuración de valores por defecto
+    const useDefaultLocation = process.env.NEXT_PUBLIC_USE_DEFAULT_LOCATION === 'true'
+    const defaultDepartamento = process.env.NEXT_PUBLIC_DEFAULT_DEPARTAMENTO || 'Atlántico'
+    const defaultMunicipio = process.env.NEXT_PUBLIC_DEFAULT_MUNICIPIO || 'Soledad'
+    
+    // Tipo de documento siempre es CC
+    const tipoDocumentoFijo = 'CC'
 
     // Skip header row (row 1) and process data
     worksheet.eachRow((row, rowNumber) => {
@@ -142,9 +122,13 @@ export async function POST(request: NextRequest) {
         if (header.includes('Apellidos')) {
           rowData.apellidos = cellValue?.toString() || ''
         }
-        if (header.includes('Tipo de Documento')) {
-          const tipoDoc = cellValue?.toString() || 'CC'
-          rowData.tipo_documento = normalizeTipoDocumento(tipoDoc)
+        // Tipo de documento siempre es CC (no leer del archivo)
+        rowData.tipo_documento = tipoDocumentoFijo
+        
+        // Solo leer tipo de documento del archivo si default_location NO está activo
+        if (!useDefaultLocation && header.includes('Tipo de Documento')) {
+          // Aunque no debería estar en el archivo, por compatibilidad lo ignoramos
+          // y siempre usamos CC
         }
         if (header.includes('Número de Documento')) {
           rowData.numero_documento = cellValue?.toString() || ''
@@ -167,11 +151,14 @@ export async function POST(request: NextRequest) {
         if (header.includes('Código Barrio') || header.includes('Barrio')) {
           rowData.barrio_codigo = cellValue?.toString()?.trim() || ''
         }
-        if (header.includes('Departamento')) {
-          rowData.departamento = cellValue?.toString() || ''
-        }
-        if (header.includes('Municipio')) {
-          rowData.municipio = cellValue?.toString() || ''
+        // Solo leer departamento y municipio si default_location NO está activo
+        if (!useDefaultLocation) {
+          if (header.includes('Departamento')) {
+            rowData.departamento = cellValue?.toString() || ''
+          }
+          if (header.includes('Municipio')) {
+            rowData.municipio = cellValue?.toString() || ''
+          }
         }
         if (header.includes('Código Puesto') || header.includes('Puesto de Votación')) {
           rowData.puesto_codigo = cellValue?.toString()?.trim() || ''
@@ -181,6 +168,13 @@ export async function POST(request: NextRequest) {
         }
       })
 
+      // Inferir valores según configuración
+      rowData.tipo_documento = tipoDocumentoFijo
+      if (useDefaultLocation) {
+        rowData.departamento = defaultDepartamento
+        rowData.municipio = defaultMunicipio
+      }
+      
       // Validate row data
       try {
         personaSchema.parse(rowData)

@@ -23,8 +23,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
-import { Loader2 } from 'lucide-react'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Loader2, Search, ChevronDown } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
+import { cn } from '@/lib/utils'
 import type { Persona, Barrio, PuestoVotacion } from '@/lib/types'
 
 interface PersonaFormProps {
@@ -47,6 +49,10 @@ export function PersonaForm({
   const [loadingBarrios, setLoadingBarrios] = useState(false)
   const [loadingPuestos, setLoadingPuestos] = useState(false)
   const [isDataLoaded, setIsDataLoaded] = useState(false)
+  const [barrioSearch, setBarrioSearch] = useState('')
+  const [barrioPopoverOpen, setBarrioPopoverOpen] = useState(false)
+  const [puestoSearch, setPuestoSearch] = useState('')
+  const [puestoPopoverOpen, setPuestoPopoverOpen] = useState(false)
 
   // Configuración de valores por defecto
   const useDefaultLocation = process.env.NEXT_PUBLIC_USE_DEFAULT_LOCATION === 'true'
@@ -127,7 +133,7 @@ export function PersonaForm({
       form.reset({
         nombres: initialData.nombres || '',
         apellidos: initialData.apellidos || '',
-        tipo_documento: initialData.tipo_documento || 'CC',
+        tipo_documento: 'CC',
         numero_documento: initialData.numero_documento || '',
         fecha_nacimiento: initialData.fecha_nacimiento || '',
         fecha_expedicion: initialData.fecha_expedicion || '',
@@ -261,30 +267,30 @@ export function PersonaForm({
               <FormField
                 control={form.control}
                 name="tipo_documento"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Tipo de Documento *</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      value={field.value}
-                      disabled={loading}
-                    >
+                render={({ field }) => {
+                  // Asegurar que siempre sea CC
+                  if (field.value !== 'CC') {
+                    field.onChange('CC')
+                  }
+                  return (
+                    <FormItem>
+                      <FormLabel>Tipo de Documento *</FormLabel>
                       <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecciona tipo" />
-                        </SelectTrigger>
+                        <Input
+                          {...field}
+                          value="CC"
+                          disabled
+                          readOnly
+                          className="bg-muted"
+                        />
                       </FormControl>
-                      <SelectContent>
-                        {documentoTipos.map((tipo) => (
-                          <SelectItem key={tipo} value={tipo}>
-                            {tipo}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                      <p className="text-xs text-muted-foreground">
+                        El tipo de documento es fijo en CC
+                      </p>
+                      <FormMessage />
+                    </FormItem>
+                  )
+                }}
               />
               <FormField
                 control={form.control}
@@ -451,34 +457,93 @@ export function PersonaForm({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Puesto de Votación</FormLabel>
-                    <Select
-                      value={field.value != null ? field.value.toString() : 'none'}
-                      onValueChange={(value) => field.onChange(value === 'none' ? null : parseInt(value))}
-                      disabled={loading || loadingPuestos}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder={loadingPuestos ? 'Cargando...' : 'Seleccionar puesto'} />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="none">Sin puesto</SelectItem>
-                        {puestosVotacion && puestosVotacion.length > 0
-                          ? puestosVotacion
-                              .filter((puesto) => puesto?.id != null && puesto.id !== undefined)
-                              .map((puesto) => {
-                                const idStr = String(puesto.id)
-                                if (!idStr || idStr.trim() === '') return null
-                                return (
-                              <SelectItem key={puesto.id} value={idStr}>
-                                {puesto.nombre}
-                              </SelectItem>
-                                )
-                              })
-                              .filter(Boolean)
-                          : null}
-                      </SelectContent>
-                    </Select>
+                    <Popover open={puestoPopoverOpen} onOpenChange={setPuestoPopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            className={cn(
+                              "w-full justify-between text-sm font-normal",
+                              !field.value && "text-muted-foreground"
+                            )}
+                            disabled={loading || loadingPuestos}
+                          >
+                            {field.value
+                              ? puestosVotacion.find((p) => p.id === field.value)?.nombre || 'Seleccionar puesto'
+                              : 'Seleccionar puesto'}
+                            <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                        <div className="p-2 border-b">
+                          <div className="relative">
+                            <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input
+                              placeholder="Buscar puesto..."
+                              value={puestoSearch}
+                              onChange={(e) => setPuestoSearch(e.target.value)}
+                              className="pl-8 h-8 text-sm"
+                            />
+                          </div>
+                        </div>
+                        <div className="max-h-[300px] overflow-y-auto p-1">
+                          <div
+                            className="flex items-center space-x-2 p-2 hover:bg-accent rounded-sm cursor-pointer"
+                            onClick={() => {
+                              field.onChange(null)
+                              setPuestoPopoverOpen(false)
+                              setPuestoSearch('')
+                            }}
+                          >
+                            <label className="text-sm cursor-pointer flex-1">
+                              Sin puesto
+                            </label>
+                          </div>
+                          {puestosVotacion
+                            .filter((p) => {
+                              if (!p) return false
+                              if (!puestoSearch.trim()) return true
+                              const searchLower = puestoSearch.toLowerCase()
+                              return p.nombre.toLowerCase().includes(searchLower) || 
+                                     p.codigo.toLowerCase().includes(searchLower)
+                            })
+                            .map((puesto) => {
+                              const isSelected = field.value === puesto.id
+                              return (
+                                <div
+                                  key={puesto.id}
+                                  className={cn(
+                                    "flex items-center space-x-2 p-2 hover:bg-accent rounded-sm cursor-pointer",
+                                    isSelected && "bg-accent"
+                                  )}
+                                  onClick={() => {
+                                    field.onChange(puesto.id)
+                                    setPuestoPopoverOpen(false)
+                                    setPuestoSearch('')
+                                  }}
+                                >
+                                  <label className="text-sm cursor-pointer flex-1">
+                                    {puesto.nombre}
+                                  </label>
+                                </div>
+                              )
+                            })}
+                          {puestosVotacion.filter((p) => {
+                            if (!p) return false
+                            if (!puestoSearch.trim()) return false
+                            const searchLower = puestoSearch.toLowerCase()
+                            return p.nombre.toLowerCase().includes(searchLower) || 
+                                   p.codigo.toLowerCase().includes(searchLower)
+                          }).length === 0 && puestoSearch.trim() && (
+                            <div className="px-2 py-1.5 text-sm text-muted-foreground text-center">
+                              No se encontraron puestos
+                            </div>
+                          )}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
                     <FormMessage />
                   </FormItem>
                 )}
