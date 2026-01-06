@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { liderSchema, type LiderFormData } from '@/features/lideres/validations/lider'
-import { documentoTipos } from '@/features/personas/validations/persona'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -24,8 +23,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { useAuth } from '@/features/auth/hooks/use-auth'
-import { Loader2 } from 'lucide-react'
-import type { Profile, Candidato, PuestoVotacion } from '@/lib/types'
+import { Loader2, Search, ChevronDown } from 'lucide-react'
+import type { Profile, Candidato, PuestoVotacion, Barrio } from '@/lib/types'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { cn } from '@/lib/utils'
 
 interface LiderFormProps {
   open: boolean
@@ -46,9 +47,15 @@ export function LiderForm({
   const [candidatos, setCandidatos] = useState<Candidato[]>([])
   const [coordinadores, setCoordinadores] = useState<Profile[]>([])
   const [puestosVotacion, setPuestosVotacion] = useState<PuestoVotacion[]>([])
+  const [barrios, setBarrios] = useState<Barrio[]>([])
   const [loadingCandidatos, setLoadingCandidatos] = useState(false)
   const [loadingCoordinadores, setLoadingCoordinadores] = useState(false)
   const [loadingPuestos, setLoadingPuestos] = useState(false)
+  const [loadingBarrios, setLoadingBarrios] = useState(false)
+  const [barrioSearch, setBarrioSearch] = useState('')
+  const [barrioPopoverOpen, setBarrioPopoverOpen] = useState(false)
+  const [puestoSearch, setPuestoSearch] = useState('')
+  const [puestoPopoverOpen, setPuestoPopoverOpen] = useState(false)
 
   // Configuración de valores por defecto
   const useDefaultLocation = process.env.NEXT_PUBLIC_USE_DEFAULT_LOCATION === 'true'
@@ -64,6 +71,8 @@ export function LiderForm({
       numero_documento: '',
       fecha_nacimiento: '',
       telefono: '',
+      direccion: '',
+      barrio_id: null,
       departamento: useDefaultLocation ? defaultDepartamento : '',
       municipio: useDefaultLocation ? defaultMunicipio : '',
       zona: '',
@@ -134,8 +143,25 @@ export function LiderForm({
         }
       }
 
+      // Load barrios
+      const fetchBarrios = async () => {
+        setLoadingBarrios(true)
+        try {
+          const response = await fetch('/api/barrios')
+          const data = await response.json()
+          if (response.ok) {
+            setBarrios(data.data || [])
+          }
+        } catch (error) {
+          // Silently fail
+        } finally {
+          setLoadingBarrios(false)
+        }
+      }
+
       fetchCandidatos()
       fetchPuestos()
+      fetchBarrios()
       if (isAdmin) {
         fetchCoordinadores()
       }
@@ -144,13 +170,16 @@ export function LiderForm({
 
   useEffect(() => {
     if (initialData) {
+      const barrioId = initialData.barrio_id || (initialData.barrio as any)?.id || null
       form.reset({
         nombres: initialData.nombres,
         apellidos: initialData.apellidos,
-        tipo_documento: initialData.tipo_documento,
+        tipo_documento: 'CC',
         numero_documento: initialData.numero_documento,
         fecha_nacimiento: initialData.fecha_nacimiento || '',
         telefono: initialData.telefono || '',
+        direccion: initialData.direccion || '',
+        barrio_id: barrioId,
         departamento: initialData.departamento || (useDefaultLocation ? defaultDepartamento : ''),
         municipio: initialData.municipio || (useDefaultLocation ? defaultMunicipio : ''),
         zona: initialData.zona || '',
@@ -165,8 +194,10 @@ export function LiderForm({
         apellidos: '',
         tipo_documento: 'CC',
         numero_documento: '',
-      fecha_nacimiento: '',
-      telefono: '',
+        fecha_nacimiento: '',
+        telefono: '',
+        direccion: '',
+        barrio_id: null,
         departamento: useDefaultLocation ? defaultDepartamento : '',
         municipio: useDefaultLocation ? defaultMunicipio : '',
         zona: '',
@@ -235,28 +266,23 @@ export function LiderForm({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="tipo_documento">Tipo de Documento *</Label>
-              <Select
-                value={form.watch('tipo_documento')}
-                onValueChange={(value) => form.setValue('tipo_documento', value as any)}
-                disabled={loading}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {documentoTipos.map((tipo) => (
-                    <SelectItem key={tipo} value={tipo}>
-                      {tipo}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Input
+                id="tipo_documento"
+                value="CC"
+                disabled
+                readOnly
+                className="bg-muted"
+              />
+              <p className="text-xs text-muted-foreground">
+                El tipo de documento es fijo en CC
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="numero_documento">Número de Documento *</Label>
               <Input
                 id="numero_documento"
                 {...form.register('numero_documento')}
+                disabled={loading}
               />
               {form.formState.errors.numero_documento && (
                 <p className="text-sm text-destructive">
@@ -286,6 +312,104 @@ export function LiderForm({
             </div>
           </div>
 
+          <div className="space-y-2">
+            <Label htmlFor="direccion">Dirección</Label>
+            <Input
+              id="direccion"
+              {...form.register('direccion')}
+              disabled={loading}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Barrio</Label>
+            <Popover open={barrioPopoverOpen} onOpenChange={setBarrioPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  className={cn(
+                    "w-full justify-between text-sm font-normal",
+                    !form.watch('barrio_id') && "text-muted-foreground"
+                  )}
+                  disabled={loading || loadingBarrios}
+                >
+                  {form.watch('barrio_id')
+                    ? barrios.find((b) => b.id === form.watch('barrio_id'))?.nombre || 'Seleccionar barrio'
+                    : 'Seleccionar barrio'}
+                  <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                <div className="p-2 border-b">
+                  <div className="relative">
+                    <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Buscar barrio..."
+                      value={barrioSearch}
+                      onChange={(e) => setBarrioSearch(e.target.value)}
+                      className="pl-8 h-8 text-sm"
+                    />
+                  </div>
+                </div>
+                <div className="max-h-[300px] overflow-y-auto p-1">
+                  <div
+                    className="flex items-center space-x-2 p-2 hover:bg-accent rounded-sm cursor-pointer"
+                    onClick={() => {
+                      form.setValue('barrio_id', null)
+                      setBarrioPopoverOpen(false)
+                      setBarrioSearch('')
+                    }}
+                  >
+                    <label className="text-sm cursor-pointer flex-1">
+                      Sin barrio
+                    </label>
+                  </div>
+                  {barrios
+                    .filter((b) => {
+                      if (!b) return false
+                      if (!barrioSearch.trim()) return true
+                      const searchLower = barrioSearch.toLowerCase()
+                      return b.nombre.toLowerCase().includes(searchLower) || 
+                             b.codigo.toLowerCase().includes(searchLower)
+                    })
+                    .map((barrio) => {
+                      const isSelected = form.watch('barrio_id') === barrio.id
+                      return (
+                        <div
+                          key={barrio.id}
+                          className={cn(
+                            "flex items-center space-x-2 p-2 hover:bg-accent rounded-sm cursor-pointer",
+                            isSelected && "bg-accent"
+                          )}
+                          onClick={() => {
+                            form.setValue('barrio_id', barrio.id)
+                            setBarrioPopoverOpen(false)
+                            setBarrioSearch('')
+                          }}
+                        >
+                          <label className="text-sm cursor-pointer flex-1">
+                            {barrio.nombre}
+                          </label>
+                        </div>
+                      )
+                    })}
+                  {barrios.filter((b) => {
+                    if (!b) return false
+                    if (!barrioSearch.trim()) return false
+                    const searchLower = barrioSearch.toLowerCase()
+                    return b.nombre.toLowerCase().includes(searchLower) || 
+                           b.codigo.toLowerCase().includes(searchLower)
+                  }).length === 0 && barrioSearch.trim() && (
+                    <div className="px-2 py-1.5 text-sm text-muted-foreground text-center">
+                      No se encontraron barrios
+                    </div>
+                  )}
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="departamento">Departamento</Label>
@@ -309,33 +433,92 @@ export function LiderForm({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="puesto_votacion_id">Puesto de Votación</Label>
-              <Select
-                value={form.watch('puesto_votacion_id') != null ? form.watch('puesto_votacion_id')!.toString() : 'none'}
-                onValueChange={(value) => form.setValue('puesto_votacion_id', value === 'none' ? null : parseInt(value))}
-                disabled={loading || loadingPuestos}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={loadingPuestos ? 'Cargando...' : 'Seleccionar puesto'} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Sin puesto</SelectItem>
-                  {puestosVotacion && puestosVotacion.length > 0
-                    ? puestosVotacion
-                        .filter((puesto) => puesto?.id != null && puesto.id !== undefined)
-                        .map((puesto) => {
-                          const idStr = String(puesto.id)
-                          if (!idStr || idStr.trim() === '') return null
-                          return (
-                            <SelectItem key={puesto.id} value={idStr}>
+              <Label>Puesto de Votación</Label>
+              <Popover open={puestoPopoverOpen} onOpenChange={setPuestoPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className={cn(
+                      "w-full justify-between text-sm font-normal",
+                      !form.watch('puesto_votacion_id') && "text-muted-foreground"
+                    )}
+                    disabled={loading || loadingPuestos}
+                  >
+                    {form.watch('puesto_votacion_id')
+                      ? puestosVotacion.find((p) => p.id === form.watch('puesto_votacion_id'))?.nombre || 'Seleccionar puesto'
+                      : 'Seleccionar puesto'}
+                    <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                  <div className="p-2 border-b">
+                    <div className="relative">
+                      <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Buscar puesto..."
+                        value={puestoSearch}
+                        onChange={(e) => setPuestoSearch(e.target.value)}
+                        className="pl-8 h-8 text-sm"
+                      />
+                    </div>
+                  </div>
+                  <div className="max-h-[300px] overflow-y-auto p-1">
+                    <div
+                      className="flex items-center space-x-2 p-2 hover:bg-accent rounded-sm cursor-pointer"
+                      onClick={() => {
+                        form.setValue('puesto_votacion_id', null)
+                        setPuestoPopoverOpen(false)
+                        setPuestoSearch('')
+                      }}
+                    >
+                      <label className="text-sm cursor-pointer flex-1">
+                        Sin puesto
+                      </label>
+                    </div>
+                    {puestosVotacion
+                      .filter((p) => {
+                        if (!p) return false
+                        if (!puestoSearch.trim()) return true
+                        const searchLower = puestoSearch.toLowerCase()
+                        return p.nombre.toLowerCase().includes(searchLower) || 
+                               p.codigo.toLowerCase().includes(searchLower)
+                      })
+                      .map((puesto) => {
+                        const isSelected = form.watch('puesto_votacion_id') === puesto.id
+                        return (
+                          <div
+                            key={puesto.id}
+                            className={cn(
+                              "flex items-center space-x-2 p-2 hover:bg-accent rounded-sm cursor-pointer",
+                              isSelected && "bg-accent"
+                            )}
+                            onClick={() => {
+                              form.setValue('puesto_votacion_id', puesto.id)
+                              setPuestoPopoverOpen(false)
+                              setPuestoSearch('')
+                            }}
+                          >
+                            <label className="text-sm cursor-pointer flex-1">
                               {puesto.nombre}
-                            </SelectItem>
-                          )
-                        })
-                        .filter(Boolean)
-                    : null}
-                </SelectContent>
-              </Select>
+                            </label>
+                          </div>
+                        )
+                      })}
+                    {puestosVotacion.filter((p) => {
+                      if (!p) return false
+                      if (!puestoSearch.trim()) return false
+                      const searchLower = puestoSearch.toLowerCase()
+                      return p.nombre.toLowerCase().includes(searchLower) || 
+                             p.codigo.toLowerCase().includes(searchLower)
+                    }).length === 0 && puestoSearch.trim() && (
+                      <div className="px-2 py-1.5 text-sm text-muted-foreground text-center">
+                        No se encontraron puestos
+                      </div>
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
             <div className="space-y-2">
               <Label htmlFor="mesa_votacion">Mesa de Votación</Label>

@@ -23,7 +23,8 @@ export async function GET(
       .from('profiles')
       .select(`
         *,
-        puesto_votacion:puestos_votacion(id, nombre, codigo)
+        puesto_votacion:puestos_votacion(id, nombre, codigo),
+        barrio:barrios(id, codigo, nombre)
       `)
       .eq('id', id)
       .eq('role', 'lider')
@@ -149,6 +150,8 @@ export async function PUT(
       numero_documento: validatedData.numero_documento,
       fecha_nacimiento: validatedData.fecha_nacimiento || null,
       telefono: validatedData.telefono || null,
+      direccion: validatedData.direccion || null,
+      barrio_id: validatedData.barrio_id || null,
       departamento: validatedData.departamento || null,
       municipio: validatedData.municipio || null,
       zona: validatedData.zona || null,

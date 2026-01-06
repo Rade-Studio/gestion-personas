@@ -38,6 +38,13 @@ export async function PUT(request: NextRequest) {
         numero_documento: validatedData.numero_documento,
         fecha_nacimiento: validatedData.fecha_nacimiento || null,
         telefono: validatedData.telefono || null,
+        direccion: validatedData.direccion || null,
+        barrio_id: validatedData.barrio_id || null,
+        departamento: validatedData.departamento || null,
+        municipio: validatedData.municipio || null,
+        zona: validatedData.zona || null,
+        puesto_votacion_id: validatedData.puesto_votacion_id || null,
+        mesa_votacion: validatedData.mesa_votacion || null,
       })
       .eq('id', profile.id)
       .select()

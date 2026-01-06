@@ -9,6 +9,9 @@ export interface Profile {
   numero_documento: string
   fecha_nacimiento?: string
   telefono?: string
+  direccion?: string
+  barrio_id?: number
+  barrio?: Barrio
   role: UserRole
   departamento?: string
   municipio?: string

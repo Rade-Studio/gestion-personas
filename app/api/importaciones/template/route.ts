@@ -35,14 +35,21 @@ export async function GET() {
     instruccionesSheet.getRow(3).height = 20
 
     const fechaExpedicionRequired = process.env.FECHA_EXPEDICION_REQUIRED === 'true'
+    const useDefaultLocation = process.env.NEXT_PUBLIC_USE_DEFAULT_LOCATION === 'true'
     instruccionesSheet.getCell('A4').value = '1. Los campos marcados con * son obligatorios'
     instruccionesSheet.getCell('A5').value = '2. El formato de fechas debe ser YYYY-MM-DD (ejemplo: 1990-01-15)'
     instruccionesSheet.getCell('A6').value = fechaExpedicionRequired 
       ? '3. La fecha de expedición es obligatoria'
       : '3. La fecha de expedición es opcional'
-    instruccionesSheet.getCell('A7').value = '4. Los tipos de documento válidos son: CC, CE, Pasaporte, TI, Otro'
-    instruccionesSheet.getCell('A8').value = '5. Para Barrio y Puesto de Votación debe usar el CÓDIGO correspondiente (ver tablas abajo)'
-    instruccionesSheet.getCell('A9').value = '6. Si no conoce el código, puede dejar el campo vacío'
+    instruccionesSheet.getCell('A7').value = '4. El tipo de documento es fijo en CC para todas las personas'
+    if (useDefaultLocation) {
+      instruccionesSheet.getCell('A8').value = '5. Departamento y Municipio se asignarán automáticamente según la configuración'
+      instruccionesSheet.getCell('A9').value = '6. Para Barrio y Puesto de Votación debe usar el CÓDIGO correspondiente (ver tablas abajo)'
+      instruccionesSheet.getCell('A10').value = '7. Si no conoce el código, puede dejar el campo vacío'
+    } else {
+      instruccionesSheet.getCell('A8').value = '5. Para Barrio y Puesto de Votación debe usar el CÓDIGO correspondiente (ver tablas abajo)'
+      instruccionesSheet.getCell('A9').value = '6. Si no conoce el código, puede dejar el campo vacío'
+    }
 
     // Espacio
     instruccionesSheet.getRow(10).height = 10
@@ -102,23 +109,41 @@ export async function GET() {
     // Hoja 2: Personas (solo títulos)
     const worksheet = workbook.addWorksheet('Personas')
 
-    // Define columns
-    worksheet.columns = [
+    // Define columns según configuración
+    const columns: any[] = [
       { header: 'Nombres *', key: 'nombres', width: 20 },
       { header: 'Apellidos *', key: 'apellidos', width: 20 },
-      { header: 'Tipo de Documento *', key: 'tipo_documento', width: 18 },
+    ]
+    
+    // Solo agregar tipo de documento si no está activo default_location
+    if (!useDefaultLocation) {
+      columns.push({ header: 'Tipo de Documento *', key: 'tipo_documento', width: 18 })
+    }
+    
+    columns.push(
       { header: 'Número de Documento *', key: 'numero_documento', width: 20 },
       { header: 'Fecha de Nacimiento', key: 'fecha_nacimiento', width: 20 },
       { header: 'Fecha de Expedición', key: 'fecha_expedicion', width: 20 },
       { header: 'Profesión', key: 'profesion', width: 20 },
       { header: 'Número de Celular', key: 'numero_celular', width: 18 },
       { header: 'Dirección', key: 'direccion', width: 30 },
-      { header: 'Código Barrio', key: 'barrio_id', width: 15 },
-      { header: 'Departamento', key: 'departamento', width: 20 },
-      { header: 'Municipio', key: 'municipio', width: 20 },
+      { header: 'Código Barrio', key: 'barrio_id', width: 15 }
+    )
+    
+    // Solo agregar departamento y municipio si no está activo default_location
+    if (!useDefaultLocation) {
+      columns.push(
+        { header: 'Departamento', key: 'departamento', width: 20 },
+        { header: 'Municipio', key: 'municipio', width: 20 }
+      )
+    }
+    
+    columns.push(
       { header: 'Código Puesto de Votación', key: 'puesto_votacion_id', width: 25 },
-      { header: 'Mesa de Votación', key: 'mesa_votacion', width: 20 },
-    ]
+      { header: 'Mesa de Votación', key: 'mesa_votacion', width: 20 }
+    )
+    
+    worksheet.columns = columns
 
     // Style header row
     worksheet.getRow(1).font = { bold: true }
