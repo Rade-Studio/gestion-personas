@@ -4,17 +4,9 @@ import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { liderSchema, type LiderFormData } from '@/features/lideres/validations/lider'
-import { documentoTipos } from '@/features/personas/validations/persona'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import type { Profile } from '@/lib/types'
 
 interface PerfilFormProps {
@@ -33,6 +25,15 @@ export function PerfilForm({ profile, onSubmit, loading = false }: PerfilFormPro
       numero_documento: '',
       fecha_nacimiento: '',
       telefono: '',
+      direccion: '',
+      barrio_id: null,
+      departamento: '',
+      municipio: '',
+      zona: '',
+      candidato_id: '',
+      coordinador_id: '',
+      puesto_votacion_id: null,
+      mesa_votacion: '',
     },
   })
 
@@ -41,10 +42,19 @@ export function PerfilForm({ profile, onSubmit, loading = false }: PerfilFormPro
       form.reset({
         nombres: profile.nombres,
         apellidos: profile.apellidos,
-        tipo_documento: profile.tipo_documento,
+        tipo_documento: 'CC',
         numero_documento: profile.numero_documento,
         fecha_nacimiento: profile.fecha_nacimiento || '',
         telefono: profile.telefono || '',
+        direccion: profile.direccion || '',
+        barrio_id: profile.barrio_id || null,
+        departamento: profile.departamento || '',
+        municipio: profile.municipio || '',
+        zona: profile.zona || '',
+        candidato_id: profile.candidato_id || '',
+        coordinador_id: profile.coordinador_id || '',
+        puesto_votacion_id: profile.puesto_votacion_id || null,
+        mesa_votacion: profile.mesa_votacion || '',
       })
     }
   }, [profile, form])
@@ -83,22 +93,16 @@ export function PerfilForm({ profile, onSubmit, loading = false }: PerfilFormPro
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="tipo_documento">Tipo de Documento *</Label>
-          <Select
-            value={form.watch('tipo_documento')}
-            onValueChange={(value) => form.setValue('tipo_documento', value as any)}
-            disabled={loading}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {documentoTipos.map((tipo) => (
-                <SelectItem key={tipo} value={tipo}>
-                  {tipo}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Input
+            id="tipo_documento"
+            value="CC"
+            disabled
+            readOnly
+            className="bg-muted"
+          />
+          <p className="text-xs text-muted-foreground">
+            El tipo de documento es fijo en CC
+          </p>
         </div>
         <div className="space-y-2">
           <Label htmlFor="numero_documento">Número de Documento *</Label>
