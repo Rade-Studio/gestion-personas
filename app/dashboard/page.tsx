@@ -8,8 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Users, CheckCircle2, XCircle, TrendingUp, ArrowUpRight, ArrowDownRight } from 'lucide-react'
 import { useAuth } from '@/features/auth/hooks/use-auth'
 import { ChartLideres } from '@/features/dashboard/components/chart-lideres'
-import { ChartDepartamentos } from '@/features/dashboard/components/chart-departamentos'
-import { ChartVotosDepartamentos } from '@/features/dashboard/components/chart-votos-departamentos'
+import { ChartRepresentantes } from '@/features/dashboard/components/chart-representantes'
 
 interface DashboardStats {
   total_registradas: number
@@ -250,9 +249,7 @@ export default function DashboardPage() {
 
             <ChartLideres />
 
-            <ChartDepartamentos />
-
-            <ChartVotosDepartamentos />
+            <ChartRepresentantes />
           </div>
         )}
       </div>
