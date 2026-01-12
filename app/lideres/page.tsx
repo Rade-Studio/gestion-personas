@@ -33,7 +33,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card } from '@/components/ui/card'
-import { Plus, Edit, Trash2, MoreHorizontal } from 'lucide-react'
+import { Plus, Edit, Trash2, MoreHorizontal, Download } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -51,6 +51,7 @@ export default function LideresPage() {
   const [lideres, setLideres] = useState<Profile[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const [formOpen, setFormOpen] = useState(false)
   const [editingLider, setEditingLider] = useState<Profile | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -147,6 +148,53 @@ export default function LideresPage() {
     }
   }
 
+  const handleExport = async () => {
+    setExporting(true)
+    try {
+      const response = await fetch('/api/lideres/export')
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Error al exportar datos')
+      }
+
+      const blob = await response.blob()
+
+      const contentDisposition = response.headers.get('Content-Disposition')
+      let filename = 'lideres-exportados.xlsx'
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="(.+)"/)
+        if (filenameMatch) {
+          filename = filenameMatch[1]
+        }
+      } else {
+        const now = new Date()
+        const day = String(now.getDate()).padStart(2, '0')
+        const month = String(now.getMonth() + 1).padStart(2, '0')
+        const year = now.getFullYear()
+        const hours = String(now.getHours()).padStart(2, '0')
+        const minutes = String(now.getMinutes()).padStart(2, '0')
+        const seconds = String(now.getSeconds()).padStart(2, '0')
+        const timestamp = `${day}${month}${year}${hours}${minutes}${seconds}`
+        filename = `lideres-exportados-${timestamp}.xlsx`
+      }
+
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      toast.success('Líderes exportados exitosamente')
+    } catch (error: any) {
+      toast.error(error.message || 'Error al exportar datos')
+    } finally {
+      setExporting(false)
+    }
+  }
+
   // Verificar que el usuario tenga permisos antes de renderizar
   if (!isAdmin && !isCoordinador) {
     return null
@@ -164,12 +212,20 @@ export default function LideresPage() {
                 : 'Administra los líderes del sistema'}
             </p>
           </div>
-          {(isAdmin || isCoordinador) && (
-            <Button onClick={handleCreate}>
-              <Plus className="mr-2 h-4 w-4" />
-              Nuevo Líder
-            </Button>
-          )}
+          <div className="flex gap-2">
+            {(isAdmin || isCoordinador) && (
+              <Button onClick={handleExport} disabled={exporting}>
+                <Download className="mr-2 h-4 w-4" />
+                {exporting ? 'Exportando...' : 'Exportar'}
+              </Button>
+            )}
+            {(isAdmin || isCoordinador) && (
+              <Button onClick={handleCreate}>
+                <Plus className="mr-2 h-4 w-4" />
+                Nuevo Líder
+              </Button>
+            )}
+          </div>
         </div>
 
           <Card>
