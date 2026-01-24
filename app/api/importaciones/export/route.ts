@@ -9,9 +9,11 @@ export async function GET(request: NextRequest) {
     const supabase = await createClient()
 
     const searchParams = request.nextUrl.searchParams
-    const puestoVotacion = searchParams.get('puesto_votacion')
+    const puestoVotacion = searchParams.getAll('puesto_votacion')
+    const barrioId = searchParams.getAll('barrio_id')
     const numeroDocumento = searchParams.get('numero_documento')
     const liderId = searchParams.get('lider_id')
+    const coordinadorId = searchParams.get('coordinador_id')
     const estado = searchParams.get('estado')
 
     let query = supabase
@@ -21,12 +23,88 @@ export async function GET(request: NextRequest) {
       })
 
     // Apply filters based on role
-    if (profile.role === 'admin' && liderId) {
+    if (profile.role === 'admin' && coordinadorId) {
+      // Admin filtra por coordinador: traer personas del coordinador y sus líderes
+      const { data: lideresDelCoordinador } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('coordinador_id', coordinadorId)
+        .eq('role', 'lider')
+      
+      const liderIds = lideresDelCoordinador?.map(l => l.id) || []
+      liderIds.push(coordinadorId) // Incluir el coordinador mismo
+      
+      if (liderIds.length > 0) {
+        query = query.in('registrado_por', liderIds)
+      } else {
+        // Si no hay líderes, solo mostrar personas del coordinador
+        query = query.eq('registrado_por', coordinadorId)
+      }
+    } else if (profile.role === 'admin' && liderId) {
+      // Admin puede filtrar por cualquier líder
       query = query.eq('registrado_por', liderId)
+    } else if (profile.role === 'coordinador') {
+      // Coordinador solo ve personas de sus líderes y propias
+      // RLS ya filtra esto, pero podemos optimizar con un filtro adicional
+      if (liderId) {
+        // Verificar que el líder pertenece al coordinador
+        const { data: lider } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('id', liderId)
+          .eq('coordinador_id', profile.id)
+          .single()
+        
+        if (lider) {
+          query = query.eq('registrado_por', liderId)
+        } else {
+          // Si el líder no pertenece al coordinador, no mostrar resultados
+          // Crear Excel vacío
+          const workbook = new ExcelJS.Workbook()
+          const worksheet = workbook.addWorksheet('Personas')
+          worksheet.columns = [
+            { header: 'Nombres', key: 'nombres', width: 20 },
+            { header: 'Apellidos', key: 'apellidos', width: 20 },
+            { header: 'Cedula', key: 'cedula', width: 20 },
+            { header: 'Celular', key: 'celular', width: 18 },
+            { header: 'Direccion', key: 'direccion', width: 30 },
+            { header: 'Nombre del barrio', key: 'barrio_nombre', width: 30 },
+            { header: 'Nombre del puesto de votacion', key: 'puesto_nombre', width: 40 },
+            { header: 'Mesa', key: 'mesa', width: 20 },
+          ]
+          worksheet.getRow(1).font = { bold: true }
+          worksheet.getRow(1).fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFE0E0E0' },
+          }
+          const buffer = await workbook.xlsx.writeBuffer()
+          return new NextResponse(buffer, {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+              'Content-Disposition': 'attachment; filename="personas-exportadas.xlsx"',
+            },
+          })
+        }
+      }
+      // Si no hay filtro de líder, RLS mostrará todas las personas del coordinador y sus líderes
     }
 
-    if (puestoVotacion) {
-      query = query.eq('puesto_votacion', puestoVotacion)
+    if (puestoVotacion && puestoVotacion.length > 0) {
+      if (puestoVotacion.length === 1) {
+        query = query.eq('puesto_votacion_id', puestoVotacion[0])
+      } else {
+        query = query.in('puesto_votacion_id', puestoVotacion)
+      }
+    }
+
+    if (barrioId && barrioId.length > 0) {
+      if (barrioId.length === 1) {
+        query = query.eq('barrio_id', barrioId[0])
+      } else {
+        query = query.in('barrio_id', barrioId)
+      }
     }
 
     if (numeroDocumento) {
