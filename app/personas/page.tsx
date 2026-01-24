@@ -465,6 +465,9 @@ export default function PersonasPage() {
       if (filters.lider_id) {
         params.append('lider_id', filters.lider_id)
       }
+      if (filters.coordinador_id) {
+        params.append('coordinador_id', filters.coordinador_id)
+      }
       if (filters.estado) {
         params.append('estado', filters.estado)
       }
