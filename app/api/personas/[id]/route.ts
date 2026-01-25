@@ -221,8 +221,9 @@ export async function PUT(
     return NextResponse.json({ data: response })
   } catch (error: unknown) {
     if (error && typeof error === 'object' && 'name' in error && error.name === 'ZodError') {
+      const zodError = error as unknown as { errors: unknown }
       return NextResponse.json(
-        { error: 'Datos inválidos', details: (error as { errors: unknown }).errors },
+        { error: 'Datos inválidos', details: zodError.errors },
         { status: 400 }
       )
     }

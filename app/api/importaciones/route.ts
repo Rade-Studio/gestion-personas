@@ -489,7 +489,7 @@ export async function POST(request: NextRequest) {
         registrosExitosos: 0,
         registrosFallidos: errors.length + rowsToSkip.length,
         archivoNombre: file.name,
-        errores: errors.length > 0 ? errors : null,
+        errores: errors.length > 0 ? errors : undefined,
       },
     })
 
@@ -630,7 +630,7 @@ export async function POST(request: NextRequest) {
         errores:
           errors.length > 0 || insertErrors.length > 0 || updateErrors.length > 0
             ? [...errors, ...insertErrors, ...updateErrors]
-            : null,
+            : undefined,
       },
     })
 

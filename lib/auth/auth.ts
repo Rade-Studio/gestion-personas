@@ -33,29 +33,28 @@ declare module 'next-auth' {
   }
 }
 
-declare module '@auth/core/jwt' {
-  interface JWT {
-    id: string
-    role: UserRole
-    nombres: string
-    apellidos: string
-    numeroDocumento: string
-    tipoDocumento: string
-    telefono?: string | null
-    direccion?: string | null
-    barrioId?: number | null
-    departamento?: string | null
-    municipio?: string | null
-    zona?: string | null
-    candidatoId?: string | null
-    coordinadorId?: string | null
-    puestoVotacionId?: number | null
-    mesaVotacion?: string | null
-  }
+// Extended JWT type for callbacks
+interface ExtendedJWT {
+  id: string
+  role: UserRole
+  nombres: string
+  apellidos: string
+  numeroDocumento: string
+  tipoDocumento: string
+  telefono?: string | null
+  direccion?: string | null
+  barrioId?: number | null
+  departamento?: string | null
+  municipio?: string | null
+  zona?: string | null
+  candidatoId?: string | null
+  coordinadorId?: string | null
+  puestoVotacionId?: number | null
+  mesaVotacion?: string | null
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  adapter: PrismaAdapter(prisma),
+  adapter: PrismaAdapter(prisma) as any, // eslint-disable-line @typescript-eslint/no-explicit-any
   session: { strategy: 'jwt' },
   trustHost: true,
   pages: {
@@ -120,69 +119,71 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
   callbacks: {
     async jwt({ token, user, trigger, session }) {
+      const extToken = token as ExtendedJWT & typeof token
       if (user) {
-        token.id = user.id
-        token.role = user.role
-        token.nombres = user.nombres
-        token.apellidos = user.apellidos
-        token.numeroDocumento = user.numeroDocumento
-        token.tipoDocumento = user.tipoDocumento
-        token.telefono = user.telefono
-        token.direccion = user.direccion
-        token.barrioId = user.barrioId
-        token.departamento = user.departamento
-        token.municipio = user.municipio
-        token.zona = user.zona
-        token.candidatoId = user.candidatoId
-        token.coordinadorId = user.coordinadorId
-        token.puestoVotacionId = user.puestoVotacionId
-        token.mesaVotacion = user.mesaVotacion
+        extToken.id = user.id
+        extToken.role = user.role
+        extToken.nombres = user.nombres
+        extToken.apellidos = user.apellidos
+        extToken.numeroDocumento = user.numeroDocumento
+        extToken.tipoDocumento = user.tipoDocumento
+        extToken.telefono = user.telefono
+        extToken.direccion = user.direccion
+        extToken.barrioId = user.barrioId
+        extToken.departamento = user.departamento
+        extToken.municipio = user.municipio
+        extToken.zona = user.zona
+        extToken.candidatoId = user.candidatoId
+        extToken.coordinadorId = user.coordinadorId
+        extToken.puestoVotacionId = user.puestoVotacionId
+        extToken.mesaVotacion = user.mesaVotacion
       }
 
       // Handle session update (refresh profile)
       if (trigger === 'update' && session) {
         const profile = await prisma.profile.findUnique({
-          where: { id: token.id },
+          where: { id: extToken.id },
         })
         if (profile) {
-          token.role = profile.role
-          token.nombres = profile.nombres
-          token.apellidos = profile.apellidos
-          token.numeroDocumento = profile.numeroDocumento
-          token.tipoDocumento = profile.tipoDocumento
-          token.telefono = profile.telefono
-          token.direccion = profile.direccion
-          token.barrioId = profile.barrioId
-          token.departamento = profile.departamento
-          token.municipio = profile.municipio
-          token.zona = profile.zona
-          token.candidatoId = profile.candidatoId
-          token.coordinadorId = profile.coordinadorId
-          token.puestoVotacionId = profile.puestoVotacionId
-          token.mesaVotacion = profile.mesaVotacion
+          extToken.role = profile.role
+          extToken.nombres = profile.nombres
+          extToken.apellidos = profile.apellidos
+          extToken.numeroDocumento = profile.numeroDocumento
+          extToken.tipoDocumento = profile.tipoDocumento
+          extToken.telefono = profile.telefono
+          extToken.direccion = profile.direccion
+          extToken.barrioId = profile.barrioId
+          extToken.departamento = profile.departamento
+          extToken.municipio = profile.municipio
+          extToken.zona = profile.zona
+          extToken.candidatoId = profile.candidatoId
+          extToken.coordinadorId = profile.coordinadorId
+          extToken.puestoVotacionId = profile.puestoVotacionId
+          extToken.mesaVotacion = profile.mesaVotacion
         }
       }
 
-      return token
+      return extToken
     },
     async session({ session, token }) {
+      const extToken = token as unknown as ExtendedJWT
       if (session.user) {
-        session.user.id = token.id
-        session.user.role = token.role
-        session.user.nombres = token.nombres
-        session.user.apellidos = token.apellidos
-        session.user.numeroDocumento = token.numeroDocumento
-        session.user.tipoDocumento = token.tipoDocumento
-        session.user.telefono = token.telefono
-        session.user.direccion = token.direccion
-        session.user.barrioId = token.barrioId
-        session.user.departamento = token.departamento
-        session.user.municipio = token.municipio
-        session.user.zona = token.zona
-        session.user.candidatoId = token.candidatoId
-        session.user.coordinadorId = token.coordinadorId
-        session.user.puestoVotacionId = token.puestoVotacionId
-        session.user.mesaVotacion = token.mesaVotacion
+        session.user.id = extToken.id
+        session.user.role = extToken.role
+        session.user.nombres = extToken.nombres
+        session.user.apellidos = extToken.apellidos
+        session.user.numeroDocumento = extToken.numeroDocumento
+        session.user.tipoDocumento = extToken.tipoDocumento
+        session.user.telefono = extToken.telefono
+        session.user.direccion = extToken.direccion
+        session.user.barrioId = extToken.barrioId
+        session.user.departamento = extToken.departamento
+        session.user.municipio = extToken.municipio
+        session.user.zona = extToken.zona
+        session.user.candidatoId = extToken.candidatoId
+        session.user.coordinadorId = extToken.coordinadorId
+        session.user.puestoVotacionId = extToken.puestoVotacionId
+        session.user.mesaVotacion = extToken.mesaVotacion
       }
       return session
     },
