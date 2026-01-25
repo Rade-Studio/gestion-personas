@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
-import { requireAdminOrCoordinador, getCurrentProfile } from '@/lib/auth/helpers'
+import { prisma } from '@/lib/db/prisma'
+import { getCurrentProfile } from '@/lib/auth/helpers'
 
 export async function GET(
   request: NextRequest,
@@ -9,55 +9,60 @@ export async function GET(
   try {
     const profile = await getCurrentProfile()
     if (!profile) {
-      return NextResponse.json(
-        { error: 'No autenticado' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
     }
 
     const { id } = await params
 
     // Coordinadores solo pueden ver sus propios líderes
     if (profile.role === 'coordinador' && profile.id !== id) {
-      return NextResponse.json(
-        { error: 'No autorizado' },
-        { status: 403 }
-      )
+      return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
     }
 
     // Solo admins y coordinadores pueden acceder
     if (profile.role !== 'admin' && profile.role !== 'coordinador') {
-      return NextResponse.json(
-        { error: 'No autorizado' },
-        { status: 403 }
-      )
+      return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
     }
 
-    const supabase = await createClient()
+    const data = await prisma.profile.findMany({
+      where: {
+        coordinadorId: id,
+        role: 'lider',
+      },
+      include: {
+        candidato: { select: { id: true, nombreCompleto: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    })
 
-    const { data, error } = await supabase
-      .from('profiles')
-      .select(`
-        *,
-        candidato:candidatos(id, nombre_completo)
-      `)
-      .eq('coordinador_id', id)
-      .eq('role', 'lider')
-      .order('created_at', { ascending: false })
+    // Transform to match expected format
+    const transformedData = data.map((p) => ({
+      id: p.id,
+      nombres: p.nombres,
+      apellidos: p.apellidos,
+      tipo_documento: p.tipoDocumento,
+      numero_documento: p.numeroDocumento,
+      fecha_nacimiento: p.fechaNacimiento?.toISOString().split('T')[0],
+      telefono: p.telefono,
+      role: p.role,
+      departamento: p.departamento,
+      municipio: p.municipio,
+      zona: p.zona,
+      candidato_id: p.candidatoId,
+      candidato: p.candidato
+        ? { id: p.candidato.id, nombre_completo: p.candidato.nombreCompleto }
+        : null,
+      coordinador_id: p.coordinadorId,
+      created_at: p.createdAt.toISOString(),
+      updated_at: p.updatedAt.toISOString(),
+    }))
 
-    if (error) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: 500 }
-      )
-    }
-
-    return NextResponse.json({ data: data || [] })
-  } catch (error: any) {
+    return NextResponse.json({ data: transformedData })
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Error en el servidor'
     return NextResponse.json(
-      { error: error.message || 'Error en el servidor' },
-      { status: error.message?.includes('No autorizado') ? 403 : 500 }
+      { error: errorMessage },
+      { status: errorMessage.includes('No autorizado') ? 403 : 500 }
     )
   }
 }
-

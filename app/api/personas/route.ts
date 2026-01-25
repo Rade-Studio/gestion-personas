@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
-import { requireLiderOrAdmin, getCurrentProfile, requireCoordinadorOrAdmin, requireConsultorOrAdmin } from '@/lib/auth/helpers'
+import { prisma } from '@/lib/db/prisma'
+import { requireLiderOrAdmin, requireConsultorOrAdmin } from '@/lib/auth/helpers'
 import { personaSchema } from '@/features/personas/validations/persona'
 import {
   isDocumentValidationEnabled,
@@ -8,6 +8,7 @@ import {
   createPerson,
   getDocumentInfo,
 } from '@/lib/pocketbase/client'
+import type { DocumentoTipo } from '@prisma/client'
 
 export async function GET(request: NextRequest) {
   try {
@@ -18,12 +19,9 @@ export async function GET(request: NextRequest) {
     } catch {
       profile = await requireConsultorOrAdmin()
     }
-    const supabase = await createClient()
 
     const searchParams = request.nextUrl.searchParams
-    const puestoVotacion = searchParams.get('puesto_votacion')
     const puestoVotacionArray = searchParams.getAll('puesto_votacion')
-    const barrioId = searchParams.get('barrio_id')
     const barrioIdArray = searchParams.getAll('barrio_id')
     const numeroDocumento = searchParams.get('numero_documento')
     const liderId = searchParams.get('lider_id')
@@ -33,181 +31,191 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '10')
     const offset = (page - 1) * limit
 
-    let query = supabase
-      .from('personas')
-      .select('*, voto_confirmaciones(*), profiles!personas_registrado_por_fkey(nombres, apellidos, coordinador_id), barrios(id, codigo, nombre), puestos_votacion(id, codigo, nombre, direccion)', {
-        count: 'exact',
-      })
+    // Build where clause
+    const where: Record<string, unknown> = {}
 
     // Apply filters based on role
     if (profile.role === 'admin' && coordinadorId) {
       // Admin filtra por coordinador: traer personas del coordinador y sus líderes
-      const { data: lideresDelCoordinador } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('coordinador_id', coordinadorId)
-        .eq('role', 'lider')
-      
-      const liderIds = lideresDelCoordinador?.map(l => l.id) || []
+      const lideresDelCoordinador = await prisma.profile.findMany({
+        where: {
+          coordinadorId: coordinadorId,
+          role: 'lider',
+        },
+        select: { id: true },
+      })
+
+      const liderIds = lideresDelCoordinador.map((l) => l.id)
       liderIds.push(coordinadorId) // Incluir el coordinador mismo
-      
-      if (liderIds.length > 0) {
-        query = query.in('registrado_por', liderIds)
-      } else {
-        // Si no hay líderes, solo mostrar personas del coordinador
-        query = query.eq('registrado_por', coordinadorId)
-      }
+
+      where.registradoPorId = { in: liderIds }
     } else if (profile.role === 'admin' && liderId) {
-      // Admin puede filtrar por cualquier líder
-      query = query.eq('registrado_por', liderId)
+      where.registradoPorId = liderId
     } else if (profile.role === 'coordinador') {
-      // Coordinador solo ve personas de sus líderes y propias
-      // RLS ya filtra esto, pero podemos optimizar con un filtro adicional
       if (liderId) {
         // Verificar que el líder pertenece al coordinador
-        const { data: lider } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('id', liderId)
-          .eq('coordinador_id', profile.id)
-          .single()
-        
+        const lider = await prisma.profile.findFirst({
+          where: {
+            id: liderId,
+            coordinadorId: profile.id,
+          },
+        })
+
         if (lider) {
-          query = query.eq('registrado_por', liderId)
+          where.registradoPorId = liderId
         } else {
-          // Si el líder no pertenece al coordinador, no mostrar resultados
           return NextResponse.json({
             data: [],
-            pagination: {
-              page,
-              limit,
-              total: 0,
-              totalPages: 0,
-            },
+            pagination: { page, limit, total: 0, totalPages: 0 },
           })
         }
+      } else {
+        // Sin filtro de líder, mostrar todas las personas del coordinador y sus líderes
+        const lideresDelCoordinador = await prisma.profile.findMany({
+          where: {
+            coordinadorId: profile.id,
+            role: 'lider',
+          },
+          select: { id: true },
+        })
+
+        const liderIds = lideresDelCoordinador.map((l) => l.id)
+        liderIds.push(profile.id)
+
+        where.registradoPorId = { in: liderIds }
       }
-      // Si no hay filtro de líder, RLS mostrará todas las personas del coordinador y sus líderes
     } else if (profile.role === 'lider') {
-      // Líder solo ve sus propias personas (RLS ya lo maneja)
+      where.registradoPorId = profile.id
     }
 
     // Handle multiple puesto_votacion filters
     if (puestoVotacionArray.length > 0) {
       const puestoIds = puestoVotacionArray
-        .map((pv) => {
-          const id = parseInt(pv)
-          return !isNaN(id) ? id : null
-        })
-        .filter((id): id is number => id !== null)
-      
+        .map((pv) => parseInt(pv))
+        .filter((id) => !isNaN(id))
+
       if (puestoIds.length > 0) {
-        query = query.in('puesto_votacion_id', puestoIds)
-      }
-    } else if (puestoVotacion) {
-      // Fallback to single value for backward compatibility
-      const puestoId = parseInt(puestoVotacion)
-      if (!isNaN(puestoId)) {
-        query = query.eq('puesto_votacion_id', puestoId)
-      } else {
-        // Si es código, buscar el ID primero
-        const { data: puesto } = await supabase
-          .from('puestos_votacion')
-          .select('id')
-          .eq('codigo', puestoVotacion)
-          .single()
-        if (puesto) {
-          query = query.eq('puesto_votacion_id', puesto.id)
-        }
+        where.puestoVotacionId = { in: puestoIds }
       }
     }
 
     // Handle multiple barrio_id filters
     if (barrioIdArray.length > 0) {
-      const barrioIds = barrioIdArray
-        .map((bid) => {
-          const id = parseInt(bid)
-          return !isNaN(id) ? id : null
-        })
-        .filter((id): id is number => id !== null)
-      
+      const barrioIds = barrioIdArray.map((bid) => parseInt(bid)).filter((id) => !isNaN(id))
+
       if (barrioIds.length > 0) {
-        query = query.in('barrio_id', barrioIds)
-      }
-    } else if (barrioId) {
-      // Fallback to single value for backward compatibility
-      const barrioIdNum = parseInt(barrioId)
-      if (!isNaN(barrioIdNum)) {
-        query = query.eq('barrio_id', barrioIdNum)
+        where.barrioId = { in: barrioIds }
       }
     }
 
     if (numeroDocumento) {
-      query = query.ilike('numero_documento', `%${numeroDocumento}%`)
+      where.numeroDocumento = { contains: numeroDocumento, mode: 'insensitive' }
     }
 
     // If filtering by estado, we need to get all matching records first, then filter in memory
-    // This is because estado is determined by the confirmacion relationship and missing_data
-    const shouldFilterInMemory = estado === 'confirmed' || estado === 'pending' || estado === 'missing_data'
+    const shouldFilterInMemory =
+      estado === 'confirmed' || estado === 'pending' || estado === 'missing_data'
     const queryLimit = shouldFilterInMemory ? 10000 : limit
     const queryOffset = shouldFilterInMemory ? 0 : offset
 
-    query = query.order('created_at', { ascending: false })
-      .range(queryOffset, queryOffset + queryLimit - 1)
+    const [data, count] = await Promise.all([
+      prisma.persona.findMany({
+        where,
+        include: {
+          confirmaciones: true,
+          registradoPor: {
+            select: { nombres: true, apellidos: true, coordinadorId: true },
+          },
+          barrio: { select: { id: true, codigo: true, nombre: true } },
+          puestoVotacion: { select: { id: true, codigo: true, nombre: true, direccion: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: queryOffset,
+        take: queryLimit,
+      }),
+      prisma.persona.count({ where }),
+    ])
 
-    const { data, error, count } = await query
+    // Transform data
+    const fechaExpedicionRequired = process.env.FECHA_EXPEDICION_REQUIRED === 'true'
 
-    if (error) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: 500 }
-      )
-    }
+    let transformedData = data.map((persona) => {
+      const confirmaciones = persona.confirmaciones || []
+      const confirmacion =
+        confirmaciones
+          .filter((c) => !c.reversado)
+          .sort((a, b) => b.confirmadoAt.getTime() - a.confirmadoAt.getTime())[0] ||
+        confirmaciones.sort((a, b) => b.confirmadoAt.getTime() - a.confirmadoAt.getTime())[0]
 
-    // Transform data: convert voto_confirmaciones array to confirmacion object
-    let transformedData = (data || []).map((persona: any) => {
-      const confirmaciones = persona.voto_confirmaciones || []
-      // Get the most recent non-reversed confirmation, or the most recent one
-      const confirmacion = confirmaciones
-        .filter((c: any) => !c.reversado)
-        .sort((a: any, b: any) => 
-          new Date(b.confirmado_at).getTime() - new Date(a.confirmado_at).getTime()
-        )[0] || confirmaciones
-        .sort((a: any, b: any) => 
-          new Date(b.confirmado_at).getTime() - new Date(a.confirmado_at).getTime()
-        )[0]
-
-      const { voto_confirmaciones, puestos_votacion, ...personaData } = persona
       return {
-        ...personaData,
-        puesto_votacion: puestos_votacion || persona.puesto_votacion,
-        confirmacion: confirmacion || undefined,
+        id: persona.id,
+        nombres: persona.nombres,
+        apellidos: persona.apellidos,
+        tipo_documento: persona.tipoDocumento,
+        numero_documento: persona.numeroDocumento,
+        fecha_nacimiento: persona.fechaNacimiento?.toISOString().split('T')[0],
+        fecha_expedicion: persona.fechaExpedicion?.toISOString().split('T')[0],
+        profesion: persona.profesion,
+        edad: persona.edad,
+        numero_celular: persona.numeroCelular,
+        direccion: persona.direccion,
+        barrio_id: persona.barrioId,
+        barrios: persona.barrio,
+        departamento: persona.departamento,
+        municipio: persona.municipio,
+        puesto_votacion_id: persona.puestoVotacionId,
+        puesto_votacion: persona.puestoVotacion,
+        mesa_votacion: persona.mesaVotacion,
+        registrado_por: persona.registradoPorId,
+        profiles: persona.registradoPor,
+        es_importado: persona.esImportado,
+        importacion_id: persona.importacionId,
+        created_at: persona.createdAt.toISOString(),
+        updated_at: persona.updatedAt.toISOString(),
+        confirmacion: confirmacion
+          ? {
+              id: confirmacion.id,
+              persona_id: confirmacion.personaId,
+              imagen_url: confirmacion.imagenUrl,
+              imagen_path: confirmacion.imagenPath,
+              confirmado_por: confirmacion.confirmadoPorId,
+              confirmado_at: confirmacion.confirmadoAt.toISOString(),
+              reversado: confirmacion.reversado,
+              reversado_por: confirmacion.reversadoPorId,
+              reversado_at: confirmacion.reversadoAt?.toISOString(),
+            }
+          : undefined,
       }
     })
 
-    // Filter by estado (missing_data/pendiente/confirmado) if provided
-    const fechaExpedicionRequired = process.env.FECHA_EXPEDICION_REQUIRED === 'true'
-    
+    // Filter by estado if provided
     if (estado === 'missing_data') {
-      transformedData = transformedData.filter((persona: any) => {
-        const puestoVotacion = persona.puesto_votacion?.nombre || persona.puesto_votacion
+      transformedData = transformedData.filter((persona) => {
+        const puestoVotacion = persona.puesto_votacion?.nombre
         const faltaPuestoOMesa = !puestoVotacion || !persona.mesa_votacion
         const faltaFechaExpedicion = fechaExpedicionRequired && !persona.fecha_expedicion
         return faltaPuestoOMesa || faltaFechaExpedicion
       })
     } else if (estado === 'confirmed') {
-      transformedData = transformedData.filter((persona: any) => {
-        const puestoVotacion = persona.puesto_votacion?.nombre || persona.puesto_votacion
-        return puestoVotacion && persona.mesa_votacion && 
-        (!fechaExpedicionRequired || persona.fecha_expedicion) &&
-        persona.confirmacion && !persona.confirmacion.reversado
+      transformedData = transformedData.filter((persona) => {
+        const puestoVotacion = persona.puesto_votacion?.nombre
+        return (
+          puestoVotacion &&
+          persona.mesa_votacion &&
+          (!fechaExpedicionRequired || persona.fecha_expedicion) &&
+          persona.confirmacion &&
+          !persona.confirmacion.reversado
+        )
       })
     } else if (estado === 'pending') {
-      transformedData = transformedData.filter((persona: any) => {
-        const puestoVotacion = persona.puesto_votacion?.nombre || persona.puesto_votacion
-        return puestoVotacion && persona.mesa_votacion &&
-        (!fechaExpedicionRequired || persona.fecha_expedicion) &&
-        (!persona.confirmacion || persona.confirmacion.reversado)
+      transformedData = transformedData.filter((persona) => {
+        const puestoVotacion = persona.puesto_votacion?.nombre
+        return (
+          puestoVotacion &&
+          persona.mesa_votacion &&
+          (!fechaExpedicionRequired || persona.fecha_expedicion) &&
+          (!persona.confirmacion || persona.confirmacion.reversado)
+        )
       })
     }
 
@@ -222,14 +230,15 @@ export async function GET(request: NextRequest) {
       pagination: {
         page,
         limit,
-        total: shouldFilterInMemory ? totalFiltered : (count || 0),
-        totalPages: Math.ceil((shouldFilterInMemory ? totalFiltered : (count || 0)) / limit),
+        total: shouldFilterInMemory ? totalFiltered : count,
+        totalPages: Math.ceil((shouldFilterInMemory ? totalFiltered : count) / limit),
       },
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Error en el servidor'
     return NextResponse.json(
-      { error: error.message || 'Error en el servidor' },
-      { status: error.message?.includes('No autenticado') ? 401 : 500 }
+      { error: errorMessage },
+      { status: errorMessage.includes('No autenticado') ? 401 : 500 }
     )
   }
 }
@@ -238,26 +247,55 @@ export async function POST(request: NextRequest) {
   try {
     // Líderes, coordinadores y admins pueden crear personas
     const profile = await requireLiderOrAdmin()
-    const supabase = await createClient()
 
     const body = await request.json()
     const validatedData = personaSchema.parse(body)
 
     // Validar fecha_expedicion si es requerida
     const fechaExpedicionRequired = process.env.FECHA_EXPEDICION_REQUIRED === 'true'
-    if (fechaExpedicionRequired && (!validatedData.fecha_expedicion || validatedData.fecha_expedicion.trim() === '')) {
+    if (
+      fechaExpedicionRequired &&
+      (!validatedData.fecha_expedicion || validatedData.fecha_expedicion.trim() === '')
+    ) {
       return NextResponse.json(
         { error: 'La fecha de expedición es obligatoria' },
         { status: 400 }
       )
     }
 
-    // Check if numero_documento already exists in Supabase
-    const { data: existing } = await supabase
-      .from('personas')
-      .select('id')
-      .eq('numero_documento', validatedData.numero_documento)
-      .single()
+    // Determinar el registrado_por final
+    let registradoPor = profile.id
+    let liderProfile = profile
+
+    // Si es coordinador y envía registrado_por, validar que el líder pertenezca al coordinador
+    if (profile.role === 'coordinador' && validatedData.registrado_por) {
+      const lider = await prisma.profile.findFirst({
+        where: {
+          id: validatedData.registrado_por,
+          coordinadorId: profile.id,
+          role: 'lider',
+        },
+      })
+
+      if (!lider) {
+        return NextResponse.json(
+          { error: 'El líder seleccionado no pertenece a este coordinador' },
+          { status: 400 }
+        )
+      }
+
+      registradoPor = lider.id
+      liderProfile = {
+        ...profile,
+        id: lider.id,
+        candidato_id: lider.candidatoId || undefined,
+      }
+    }
+
+    // Check if numero_documento already exists
+    const existing = await prisma.persona.findUnique({
+      where: { numeroDocumento: validatedData.numero_documento },
+    })
 
     if (existing) {
       return NextResponse.json(
@@ -270,8 +308,8 @@ export async function POST(request: NextRequest) {
     if (isDocumentValidationEnabled()) {
       const documentInfo = await getDocumentInfo(validatedData.numero_documento)
       if (documentInfo) {
-        // Construir mensaje de error con información del representante
-        let errorMessage = 'Ya existe una persona con este número de documento en el sistema externo'
+        let errorMessage =
+          'Ya existe una persona con este número de documento en el sistema externo'
         if (documentInfo.place) {
           errorMessage += ` registrado en el representante "${documentInfo.place}"`
         } else {
@@ -282,68 +320,92 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const { data, error } = await supabase
-      .from('personas')
-      .insert({
+    const data = await prisma.persona.create({
+      data: {
         nombres: validatedData.nombres,
         apellidos: validatedData.apellidos,
-        tipo_documento: validatedData.tipo_documento,
-        numero_documento: validatedData.numero_documento,
-        fecha_nacimiento: validatedData.fecha_nacimiento || null,
-        fecha_expedicion: validatedData.fecha_expedicion || null,
+        tipoDocumento: validatedData.tipo_documento as DocumentoTipo,
+        numeroDocumento: validatedData.numero_documento,
+        fechaNacimiento: validatedData.fecha_nacimiento
+          ? new Date(validatedData.fecha_nacimiento)
+          : null,
+        fechaExpedicion: validatedData.fecha_expedicion
+          ? new Date(validatedData.fecha_expedicion)
+          : null,
         profesion: validatedData.profesion || null,
-        numero_celular: validatedData.numero_celular || null,
+        numeroCelular: validatedData.numero_celular || null,
         direccion: validatedData.direccion || null,
-        barrio_id: validatedData.barrio_id || null,
+        barrioId: validatedData.barrio_id || null,
         departamento: validatedData.departamento || null,
         municipio: validatedData.municipio || null,
-        puesto_votacion_id: validatedData.puesto_votacion_id || null,
-        mesa_votacion: validatedData.mesa_votacion || null,
-        registrado_por: profile.id,
-        es_importado: false,
-      })
-      .select('*, barrios(id, codigo, nombre), puestos_votacion(id, codigo, nombre, direccion)')
-      .single()
-
-    if (error) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: 500 }
-      )
-    }
+        puestoVotacionId: validatedData.puesto_votacion_id || null,
+        mesaVotacion: validatedData.mesa_votacion || null,
+        registradoPorId: registradoPor,
+        esImportado: false,
+      },
+      include: {
+        barrio: { select: { id: true, codigo: true, nombre: true } },
+        puestoVotacion: { select: { id: true, codigo: true, nombre: true, direccion: true } },
+      },
+    })
 
     // Sincronizar con PocketBase si está habilitado
     if (isDocumentValidationEnabled() && data) {
       let candidatoNombre: string | null = null
-      if (profile.candidato_id) {
-        const { data: candidato } = await supabase
-          .from('candidatos')
-          .select('nombre_completo')
-          .eq('id', profile.candidato_id)
-          .single()
-        candidatoNombre = candidato?.nombre_completo || null
+      if (liderProfile.candidato_id) {
+        const candidato = await prisma.candidato.findUnique({
+          where: { id: liderProfile.candidato_id },
+          select: { nombreCompleto: true },
+        })
+        candidatoNombre = candidato?.nombreCompleto || null
       }
 
       await createPerson({
         document_number: validatedData.numero_documento,
         place: candidatoNombre,
-        leader_id: profile.id,
+        leader_id: registradoPor,
       })
     }
 
-    return NextResponse.json({ data }, { status: 201 })
-  } catch (error: any) {
-    if (error.name === 'ZodError') {
+    // Transform to match expected format
+    const response = {
+      id: data.id,
+      nombres: data.nombres,
+      apellidos: data.apellidos,
+      tipo_documento: data.tipoDocumento,
+      numero_documento: data.numeroDocumento,
+      fecha_nacimiento: data.fechaNacimiento?.toISOString().split('T')[0],
+      fecha_expedicion: data.fechaExpedicion?.toISOString().split('T')[0],
+      profesion: data.profesion,
+      edad: data.edad,
+      numero_celular: data.numeroCelular,
+      direccion: data.direccion,
+      barrio_id: data.barrioId,
+      barrios: data.barrio,
+      departamento: data.departamento,
+      municipio: data.municipio,
+      puesto_votacion_id: data.puestoVotacionId,
+      puestos_votacion: data.puestoVotacion,
+      mesa_votacion: data.mesaVotacion,
+      registrado_por: data.registradoPorId,
+      es_importado: data.esImportado,
+      created_at: data.createdAt.toISOString(),
+      updated_at: data.updatedAt.toISOString(),
+    }
+
+    return NextResponse.json({ data: response }, { status: 201 })
+  } catch (error: unknown) {
+    if (error && typeof error === 'object' && 'name' in error && error.name === 'ZodError') {
       return NextResponse.json(
-        { error: 'Datos inválidos', details: error.errors },
+        { error: 'Datos inválidos', details: (error as { errors: unknown }).errors },
         { status: 400 }
       )
     }
 
+    const errorMessage = error instanceof Error ? error.message : 'Error en el servidor'
     return NextResponse.json(
-      { error: error.message || 'Error en el servidor' },
-      { status: error.message?.includes('No autenticado') ? 401 : 500 }
+      { error: errorMessage },
+      { status: errorMessage.includes('No autenticado') ? 401 : 500 }
     )
   }
 }
-

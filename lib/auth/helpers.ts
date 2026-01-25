@@ -1,5 +1,5 @@
-import { createClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { auth } from '@/lib/auth/auth'
+import { prisma } from '@/lib/db/prisma'
 import type { Profile } from '@/lib/types'
 
 /**
@@ -8,40 +8,72 @@ import type { Profile } from '@/lib/types'
  */
 export function generateSystemEmail(numeroDocumento: string): string {
   const domain = process.env.SYSTEM_EMAIL_DOMAIN || '@sistema.local'
-  // Asegurar que el dominio comience con @
   const emailDomain = domain.startsWith('@') ? domain : `@${domain}`
   return `${numeroDocumento}${emailDomain}`
 }
 
 export async function getCurrentUser() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const session = await auth()
 
-  if (!user) return null
+  if (!session?.user) return null
 
-  return user
+  return {
+    id: session.user.id,
+    email: session.user.email,
+  }
 }
 
 export async function getCurrentProfile(): Promise<Profile | null> {
-  const supabase = await createClient()
-  const user = await getCurrentUser()
+  const session = await auth()
 
-  if (!user) return null
+  if (!session?.user) return null
 
-  const { data: profile, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
-    .single()
+  const profile = await prisma.profile.findUnique({
+    where: { id: session.user.id },
+    include: {
+      barrio: true,
+      puestoVotacion: true,
+    },
+  })
 
-  if (error) {
-    console.error('Error al obtener perfil:', error)
-    return null
+  if (!profile) return null
+
+  return {
+    id: profile.id,
+    nombres: profile.nombres,
+    apellidos: profile.apellidos,
+    tipo_documento: profile.tipoDocumento as Profile['tipo_documento'],
+    numero_documento: profile.numeroDocumento,
+    fecha_nacimiento: profile.fechaNacimiento?.toISOString(),
+    telefono: profile.telefono || undefined,
+    direccion: profile.direccion || undefined,
+    barrio_id: profile.barrioId || undefined,
+    barrio: profile.barrio
+      ? {
+          id: profile.barrio.id,
+          codigo: profile.barrio.codigo,
+          nombre: profile.barrio.nombre,
+        }
+      : undefined,
+    role: profile.role as Profile['role'],
+    departamento: profile.departamento || undefined,
+    municipio: profile.municipio || undefined,
+    zona: profile.zona || undefined,
+    candidato_id: profile.candidatoId || undefined,
+    coordinador_id: profile.coordinadorId || undefined,
+    puesto_votacion_id: profile.puestoVotacionId || undefined,
+    puesto_votacion: profile.puestoVotacion
+      ? {
+          id: profile.puestoVotacion.id,
+          codigo: profile.puestoVotacion.codigo,
+          nombre: profile.puestoVotacion.nombre,
+          direccion: profile.puestoVotacion.direccion || undefined,
+        }
+      : undefined,
+    mesa_votacion: profile.mesaVotacion || undefined,
+    created_at: profile.createdAt.toISOString(),
+    updated_at: profile.updatedAt.toISOString(),
   }
-
-  return profile
 }
 
 export async function requireAuth() {
@@ -61,40 +93,70 @@ export async function requireAdmin() {
 }
 
 export async function requireLiderOrAdmin() {
-  const user = await getCurrentUser()
-  if (!user) {
+  const session = await auth()
+  if (!session?.user) {
     throw new Error('No autenticado')
   }
 
-  // Intentar obtener el perfil con el cliente normal primero
-  let profile = await getCurrentProfile()
-  
-  // Si no se puede obtener con el cliente normal (por RLS), usar admin client
-  if (!profile) {
-    const adminClient = createAdminClient()
-    const { data: adminProfile, error } = await adminClient
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single()
-    
-    if (error || !adminProfile) {
-      throw new Error('No autenticado: no se pudo obtener el perfil')
-    }
-    
-    profile = adminProfile
-  }
+  const profile = await prisma.profile.findUnique({
+    where: { id: session.user.id },
+    include: {
+      barrio: true,
+      puestoVotacion: true,
+    },
+  })
 
-  // Asegurar que profile no sea null
   if (!profile) {
     throw new Error('No autenticado: no se pudo obtener el perfil')
   }
 
-  // Permitir líderes, coordinadores, admins y consultores
-  if (profile.role !== 'admin' && profile.role !== 'coordinador' && profile.role !== 'lider' && profile.role !== 'consultor') {
-    throw new Error('No autorizado: se requiere rol de administrador, coordinador, líder o consultor')
+  if (
+    profile.role !== 'admin' &&
+    profile.role !== 'coordinador' &&
+    profile.role !== 'lider' &&
+    profile.role !== 'consultor'
+  ) {
+    throw new Error(
+      'No autorizado: se requiere rol de administrador, coordinador, líder o consultor'
+    )
   }
-  return profile
+
+  return {
+    id: profile.id,
+    nombres: profile.nombres,
+    apellidos: profile.apellidos,
+    tipo_documento: profile.tipoDocumento as Profile['tipo_documento'],
+    numero_documento: profile.numeroDocumento,
+    fecha_nacimiento: profile.fechaNacimiento?.toISOString(),
+    telefono: profile.telefono || undefined,
+    direccion: profile.direccion || undefined,
+    barrio_id: profile.barrioId || undefined,
+    barrio: profile.barrio
+      ? {
+          id: profile.barrio.id,
+          codigo: profile.barrio.codigo,
+          nombre: profile.barrio.nombre,
+        }
+      : undefined,
+    role: profile.role as Profile['role'],
+    departamento: profile.departamento || undefined,
+    municipio: profile.municipio || undefined,
+    zona: profile.zona || undefined,
+    candidato_id: profile.candidatoId || undefined,
+    coordinador_id: profile.coordinadorId || undefined,
+    puesto_votacion_id: profile.puestoVotacionId || undefined,
+    puesto_votacion: profile.puestoVotacion
+      ? {
+          id: profile.puestoVotacion.id,
+          codigo: profile.puestoVotacion.codigo,
+          nombre: profile.puestoVotacion.nombre,
+          direccion: profile.puestoVotacion.direccion || undefined,
+        }
+      : undefined,
+    mesa_votacion: profile.mesaVotacion || undefined,
+    created_at: profile.createdAt.toISOString(),
+    updated_at: profile.updatedAt.toISOString(),
+  } as Profile
 }
 
 export async function requireCoordinador() {
@@ -106,40 +168,63 @@ export async function requireCoordinador() {
 }
 
 export async function requireCoordinadorOrAdmin() {
-  const user = await getCurrentUser()
-  if (!user) {
+  const session = await auth()
+  if (!session?.user) {
     throw new Error('No autenticado')
   }
 
-  // Intentar obtener el perfil con el cliente normal primero
-  let profile = await getCurrentProfile()
-  
-  // Si no se puede obtener con el cliente normal (por RLS), usar admin client
-  if (!profile) {
-    const adminClient = createAdminClient()
-    const { data: adminProfile, error } = await adminClient
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single()
-    
-    if (error || !adminProfile) {
-      throw new Error('No autenticado: no se pudo obtener el perfil')
-    }
-    
-    profile = adminProfile
-  }
+  const profile = await prisma.profile.findUnique({
+    where: { id: session.user.id },
+    include: {
+      barrio: true,
+      puestoVotacion: true,
+    },
+  })
 
-  // Asegurar que profile no sea null
   if (!profile) {
     throw new Error('No autenticado: no se pudo obtener el perfil')
   }
 
-  // Verificar que el rol sea válido
   if (profile.role !== 'admin' && profile.role !== 'coordinador') {
     throw new Error('No autorizado: se requiere rol de administrador o coordinador')
   }
-  return profile
+
+  return {
+    id: profile.id,
+    nombres: profile.nombres,
+    apellidos: profile.apellidos,
+    tipo_documento: profile.tipoDocumento as Profile['tipo_documento'],
+    numero_documento: profile.numeroDocumento,
+    fecha_nacimiento: profile.fechaNacimiento?.toISOString(),
+    telefono: profile.telefono || undefined,
+    direccion: profile.direccion || undefined,
+    barrio_id: profile.barrioId || undefined,
+    barrio: profile.barrio
+      ? {
+          id: profile.barrio.id,
+          codigo: profile.barrio.codigo,
+          nombre: profile.barrio.nombre,
+        }
+      : undefined,
+    role: profile.role as Profile['role'],
+    departamento: profile.departamento || undefined,
+    municipio: profile.municipio || undefined,
+    zona: profile.zona || undefined,
+    candidato_id: profile.candidatoId || undefined,
+    coordinador_id: profile.coordinadorId || undefined,
+    puesto_votacion_id: profile.puestoVotacionId || undefined,
+    puesto_votacion: profile.puestoVotacion
+      ? {
+          id: profile.puestoVotacion.id,
+          codigo: profile.puestoVotacion.codigo,
+          nombre: profile.puestoVotacion.nombre,
+          direccion: profile.puestoVotacion.direccion || undefined,
+        }
+      : undefined,
+    mesa_votacion: profile.mesaVotacion || undefined,
+    created_at: profile.createdAt.toISOString(),
+    updated_at: profile.updatedAt.toISOString(),
+  } as Profile
 }
 
 export async function requireAdminOrCoordinador() {
@@ -155,39 +240,61 @@ export async function requireConsultor() {
 }
 
 export async function requireConsultorOrAdmin() {
-  const user = await getCurrentUser()
-  if (!user) {
+  const session = await auth()
+  if (!session?.user) {
     throw new Error('No autenticado')
   }
 
-  // Intentar obtener el perfil con el cliente normal primero
-  let profile = await getCurrentProfile()
-  
-  // Si no se puede obtener con el cliente normal (por RLS), usar admin client
-  if (!profile) {
-    const adminClient = createAdminClient()
-    const { data: adminProfile, error } = await adminClient
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single()
-    
-    if (error || !adminProfile) {
-      throw new Error('No autenticado: no se pudo obtener el perfil')
-    }
-    
-    profile = adminProfile
-  }
+  const profile = await prisma.profile.findUnique({
+    where: { id: session.user.id },
+    include: {
+      barrio: true,
+      puestoVotacion: true,
+    },
+  })
 
-  // Asegurar que profile no sea null
   if (!profile) {
     throw new Error('No autenticado: no se pudo obtener el perfil')
   }
 
-  // Verificar que el rol sea válido
   if (profile.role !== 'admin' && profile.role !== 'consultor') {
     throw new Error('No autorizado: se requiere rol de administrador o consultor')
   }
-  return profile
-}
 
+  return {
+    id: profile.id,
+    nombres: profile.nombres,
+    apellidos: profile.apellidos,
+    tipo_documento: profile.tipoDocumento as Profile['tipo_documento'],
+    numero_documento: profile.numeroDocumento,
+    fecha_nacimiento: profile.fechaNacimiento?.toISOString(),
+    telefono: profile.telefono || undefined,
+    direccion: profile.direccion || undefined,
+    barrio_id: profile.barrioId || undefined,
+    barrio: profile.barrio
+      ? {
+          id: profile.barrio.id,
+          codigo: profile.barrio.codigo,
+          nombre: profile.barrio.nombre,
+        }
+      : undefined,
+    role: profile.role as Profile['role'],
+    departamento: profile.departamento || undefined,
+    municipio: profile.municipio || undefined,
+    zona: profile.zona || undefined,
+    candidato_id: profile.candidatoId || undefined,
+    coordinador_id: profile.coordinadorId || undefined,
+    puesto_votacion_id: profile.puestoVotacionId || undefined,
+    puesto_votacion: profile.puestoVotacion
+      ? {
+          id: profile.puestoVotacion.id,
+          codigo: profile.puestoVotacion.codigo,
+          nombre: profile.puestoVotacion.nombre,
+          direccion: profile.puestoVotacion.direccion || undefined,
+        }
+      : undefined,
+    mesa_votacion: profile.mesaVotacion || undefined,
+    created_at: profile.createdAt.toISOString(),
+    updated_at: profile.updatedAt.toISOString(),
+  } as Profile
+}

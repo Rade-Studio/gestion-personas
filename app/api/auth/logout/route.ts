@@ -1,25 +1,23 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
 import { cookies } from 'next/headers'
 
 export async function POST() {
   try {
-    // Timeout máximo de 2 segundos para evitar bloqueos
-    const timeoutPromise = new Promise<{ error: null }>((resolve) => 
-      setTimeout(() => resolve({ error: null }), 2000)
-    )
-
-    const supabase = await createClient()
-    const signOutPromise = supabase.auth.signOut()
-    
-    // Usar Promise.race para aplicar timeout
-    const { error } = await Promise.race([signOutPromise, timeoutPromise])
-
-    // Limpiar cookies manualmente incluso si hay error
+    // Limpiar cookies manualmente
     const cookieStore = await cookies()
-    
-    // Lista de todas las posibles cookies de Supabase
-    const supabaseCookieNames = [
+
+    // Lista de todas las posibles cookies de Auth.js y legacy Supabase
+    const authCookieNames = [
+      'authjs.session-token',
+      'authjs.callback-url',
+      'authjs.csrf-token',
+      '__Secure-authjs.session-token',
+      '__Host-authjs.csrf-token',
+      'next-auth.session-token',
+      'next-auth.callback-url',
+      'next-auth.csrf-token',
+      '__Secure-next-auth.session-token',
+      // Legacy Supabase cookies
       'sb-access-token',
       'sb-refresh-token',
       'sb-auth-token',
@@ -27,8 +25,12 @@ export async function POST() {
     ]
 
     // Eliminar cookies del store
-    supabaseCookieNames.forEach((name) => {
-      cookieStore.delete(name)
+    authCookieNames.forEach((name) => {
+      try {
+        cookieStore.delete(name)
+      } catch {
+        // Ignore errors for non-existent cookies
+      }
     })
 
     const response = NextResponse.json(
@@ -36,15 +38,14 @@ export async function POST() {
       {
         headers: {
           'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0',
+          Pragma: 'no-cache',
+          Expires: '0',
         },
       }
     )
-    
-    // Asegurar que las cookies se eliminen en la respuesta con diferentes configuraciones
-    supabaseCookieNames.forEach((name) => {
-      // Eliminar con diferentes paths y dominios
+
+    // Asegurar que las cookies se eliminen en la respuesta
+    authCookieNames.forEach((name) => {
       response.cookies.set(name, '', {
         expires: new Date(0),
         path: '/',
@@ -55,32 +56,9 @@ export async function POST() {
       response.cookies.delete(name)
     })
 
-    // Si hubo error, loguearlo pero retornar éxito de todas formas
-    // para evitar que el cliente se quede bloqueado
-    if (error) {
-      console.error('Error al cerrar sesión (pero continuando):', error)
-    }
-
     return response
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error al cerrar sesión:', error)
-    
-    // Intentar limpiar cookies incluso en caso de error
-    try {
-      const cookieStore = await cookies()
-      const supabaseCookieNames = [
-        'sb-access-token',
-        'sb-refresh-token',
-        'sb-auth-token',
-        'supabase-auth-token',
-      ]
-      
-      supabaseCookieNames.forEach((name) => {
-        cookieStore.delete(name)
-      })
-    } catch (cookieError) {
-      console.error('Error al limpiar cookies:', cookieError)
-    }
 
     // Retornar éxito de todas formas para evitar bloqueos en el cliente
     return NextResponse.json(
@@ -89,11 +67,10 @@ export async function POST() {
         status: 200,
         headers: {
           'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0',
+          Pragma: 'no-cache',
+          Expires: '0',
         },
       }
     )
   }
 }
-

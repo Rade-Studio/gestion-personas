@@ -3,7 +3,7 @@
 import { useMemo, useState, useRef } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { useAuth } from '@/features/auth/hooks/use-auth'
-import { clearSupabaseStorage } from '@/lib/auth/client-helpers'
+import { clearAuthStorage } from '@/lib/auth/client-helpers'
 import {
   Sidebar,
   SidebarContent,
@@ -53,71 +53,19 @@ export function MainLayout({ children }: MainLayoutProps) {
     isLoggingOutRef.current = true
     setIsLoggingOut(true)
     
-    // Timeout máximo de 5 segundos para navegadores más lentos
-    const maxTimeout = setTimeout(() => {
-      console.warn('Timeout al cerrar sesión, redirigiendo de todas formas')
-      if (typeof window !== 'undefined') {
-        clearSupabaseStorage()
-        window.location.href = '/auth/login'
-      }
-    }, 5000)
-    
     try {
-      // Limpiar estado local inmediatamente
-      if (typeof window !== 'undefined') {
-        clearSupabaseStorage()
-      }
-
-      // Crear un AbortController para cancelar las peticiones si es necesario
-      const abortController = new AbortController()
-      
-      // Endpoint del servidor con timeout agresivo de 2 segundos
-      const logoutPromise = Promise.race([
-        fetch('/api/auth/logout', {
-          method: 'POST',
-          signal: abortController.signal,
-          cache: 'no-store',
-        }),
-        new Promise<Response>((resolve) => 
-          setTimeout(() => resolve(new Response(JSON.stringify({ success: true }), { status: 200 })), 2000)
-        )
-      ]).catch((error) => {
-        if (error.name !== 'AbortError') {
-          console.error('Error al cerrar sesión en servidor:', error)
-        }
-        return new Response(JSON.stringify({ success: false }), { status: 500 })
-      })
-      
-      // Cerrar sesión en el cliente con timeout de 2 segundos
-      const signOutPromise = Promise.race([
-        signOut(),
-        new Promise<void>((resolve) => setTimeout(() => resolve(), 2000))
-      ]).catch((error) => {
-        console.error('Error al cerrar sesión en cliente:', error)
-      })
-      
-      // Ejecutar ambas operaciones en paralelo, pero no bloquear la redirección
-      Promise.allSettled([logoutPromise, signOutPromise]).finally(() => {
-        clearTimeout(maxTimeout)
-      })
-      
-      // Redirigir inmediatamente después de limpiar estado local
-      // No esperar respuesta del servidor para evitar bloqueos
-      if (typeof window !== 'undefined') {
-        // Pequeño delay para asegurar que la limpieza se complete
-        setTimeout(() => {
-          window.location.href = '/auth/login'
-        }, 100)
-      }
-    } catch (error: any) {
-      clearTimeout(maxTimeout)
+      // Usar signOut de Auth.js - maneja CSRF y cookies automáticamente
+      await signOut()
+    } catch (error) {
       console.error('Error al cerrar sesión:', error)
-      
-      // Asegurar limpieza completa antes de redirigir
+      // Fallback: limpiar storage manualmente y redirigir
       if (typeof window !== 'undefined') {
-        clearSupabaseStorage()
+        clearAuthStorage()
         window.location.href = '/auth/login'
       }
+    } finally {
+      isLoggingOutRef.current = false
+      setIsLoggingOut(false)
     }
   }
 

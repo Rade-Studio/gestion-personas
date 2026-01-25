@@ -1,65 +1,44 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
-import { requireLiderOrAdmin, getCurrentProfile } from '@/lib/auth/helpers'
+import { prisma } from '@/lib/db/prisma'
+import { requireLiderOrAdmin } from '@/lib/auth/helpers'
 import ExcelJS from 'exceljs'
 
 export async function GET(request: NextRequest) {
   try {
     const profile = await requireLiderOrAdmin()
-    const supabase = await createClient()
 
     const searchParams = request.nextUrl.searchParams
-    const puestoVotacion = searchParams.getAll('puesto_votacion')
-    const barrioId = searchParams.getAll('barrio_id')
+    const puestoVotacionArray = searchParams.getAll('puesto_votacion')
+    const barrioIdArray = searchParams.getAll('barrio_id')
     const numeroDocumento = searchParams.get('numero_documento')
     const liderId = searchParams.get('lider_id')
     const coordinadorId = searchParams.get('coordinador_id')
     const estado = searchParams.get('estado')
 
-    let query = supabase
-      .from('personas')
-      .select('*, voto_confirmaciones(*), barrios(id, codigo, nombre), puestos_votacion(id, codigo, nombre)', {
-        count: 'exact',
-      })
+    // Build where clause
+    const where: Record<string, unknown> = {}
 
     // Apply filters based on role
     if (profile.role === 'admin' && coordinadorId) {
-      // Admin filtra por coordinador: traer personas del coordinador y sus líderes
-      const { data: lideresDelCoordinador } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('coordinador_id', coordinadorId)
-        .eq('role', 'lider')
-      
-      const liderIds = lideresDelCoordinador?.map(l => l.id) || []
-      liderIds.push(coordinadorId) // Incluir el coordinador mismo
-      
-      if (liderIds.length > 0) {
-        query = query.in('registrado_por', liderIds)
-      } else {
-        // Si no hay líderes, solo mostrar personas del coordinador
-        query = query.eq('registrado_por', coordinadorId)
-      }
+      const lideresDelCoordinador = await prisma.profile.findMany({
+        where: { coordinadorId: coordinadorId, role: 'lider' },
+        select: { id: true },
+      })
+
+      const liderIds = lideresDelCoordinador.map((l) => l.id)
+      liderIds.push(coordinadorId)
+
+      where.registradoPorId = { in: liderIds }
     } else if (profile.role === 'admin' && liderId) {
-      // Admin puede filtrar por cualquier líder
-      query = query.eq('registrado_por', liderId)
+      where.registradoPorId = liderId
     } else if (profile.role === 'coordinador') {
-      // Coordinador solo ve personas de sus líderes y propias
-      // RLS ya filtra esto, pero podemos optimizar con un filtro adicional
       if (liderId) {
-        // Verificar que el líder pertenece al coordinador
-        const { data: lider } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('id', liderId)
-          .eq('coordinador_id', profile.id)
-          .single()
-        
-        if (lider) {
-          query = query.eq('registrado_por', liderId)
-        } else {
-          // Si el líder no pertenece al coordinador, no mostrar resultados
-          // Crear Excel vacío
+        const lider = await prisma.profile.findFirst({
+          where: { id: liderId, coordinadorId: profile.id },
+        })
+
+        if (!lider) {
+          // Return empty Excel
           const workbook = new ExcelJS.Workbook()
           const worksheet = workbook.addWorksheet('Personas')
           worksheet.columns = [
@@ -82,96 +61,123 @@ export async function GET(request: NextRequest) {
           return new NextResponse(buffer, {
             status: 200,
             headers: {
-              'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+              'Content-Type':
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
               'Content-Disposition': 'attachment; filename="personas-exportadas.xlsx"',
             },
           })
         }
+        where.registradoPorId = liderId
+      } else {
+        const lideresDelCoordinador = await prisma.profile.findMany({
+          where: { coordinadorId: profile.id, role: 'lider' },
+          select: { id: true },
+        })
+
+        const liderIds = lideresDelCoordinador.map((l) => l.id)
+        liderIds.push(profile.id)
+
+        where.registradoPorId = { in: liderIds }
       }
-      // Si no hay filtro de líder, RLS mostrará todas las personas del coordinador y sus líderes
+    } else if (profile.role === 'lider') {
+      where.registradoPorId = profile.id
     }
 
-    if (puestoVotacion && puestoVotacion.length > 0) {
-      if (puestoVotacion.length === 1) {
-        query = query.eq('puesto_votacion_id', puestoVotacion[0])
-      } else {
-        query = query.in('puesto_votacion_id', puestoVotacion)
+    // Handle multiple puesto_votacion filters
+    if (puestoVotacionArray.length > 0) {
+      const puestoIds = puestoVotacionArray
+        .map((pv) => parseInt(pv))
+        .filter((id) => !isNaN(id))
+      if (puestoIds.length > 0) {
+        where.puestoVotacionId = { in: puestoIds }
       }
     }
 
-    if (barrioId && barrioId.length > 0) {
-      if (barrioId.length === 1) {
-        query = query.eq('barrio_id', barrioId[0])
-      } else {
-        query = query.in('barrio_id', barrioId)
+    // Handle multiple barrio_id filters
+    if (barrioIdArray.length > 0) {
+      const barrioIds = barrioIdArray.map((bid) => parseInt(bid)).filter((id) => !isNaN(id))
+      if (barrioIds.length > 0) {
+        where.barrioId = { in: barrioIds }
       }
     }
 
     if (numeroDocumento) {
-      query = query.ilike('numero_documento', `%${numeroDocumento}%`)
+      where.numeroDocumento = { contains: numeroDocumento, mode: 'insensitive' }
     }
 
     // Get all records (no pagination limit for export)
-    query = query.order('created_at', { ascending: false })
+    const data = await prisma.persona.findMany({
+      where,
+      include: {
+        confirmaciones: true,
+        barrio: { select: { id: true, codigo: true, nombre: true } },
+        puestoVotacion: { select: { id: true, codigo: true, nombre: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    })
 
-    const { data, error } = await query
+    // Transform data
+    const fechaExpedicionRequired = process.env.FECHA_EXPEDICION_REQUIRED === 'true'
 
-    if (error) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: 500 }
-      )
-    }
+    let transformedData = data.map((persona) => {
+      const confirmaciones = persona.confirmaciones || []
+      const confirmacion =
+        confirmaciones
+          .filter((c) => !c.reversado)
+          .sort((a, b) => b.confirmadoAt.getTime() - a.confirmadoAt.getTime())[0] ||
+        confirmaciones.sort((a, b) => b.confirmadoAt.getTime() - a.confirmadoAt.getTime())[0]
 
-    // Transform data: convert voto_confirmaciones array to confirmacion object
-    let transformedData = (data || []).map((persona: any) => {
-      const confirmaciones = persona.voto_confirmaciones || []
-      const confirmacion = confirmaciones
-        .filter((c: any) => !c.reversado)
-        .sort((a: any, b: any) => 
-          new Date(b.confirmado_at).getTime() - new Date(a.confirmado_at).getTime()
-        )[0] || confirmaciones
-        .sort((a: any, b: any) => 
-          new Date(b.confirmado_at).getTime() - new Date(a.confirmado_at).getTime()
-        )[0]
-
-      const { voto_confirmaciones, ...personaData } = persona
       return {
-        ...personaData,
-        confirmacion: confirmacion || undefined,
+        id: persona.id,
+        nombres: persona.nombres,
+        apellidos: persona.apellidos,
+        numero_documento: persona.numeroDocumento,
+        numero_celular: persona.numeroCelular,
+        direccion: persona.direccion,
+        barrio: persona.barrio,
+        puesto_votacion: persona.puestoVotacion,
+        puesto_votacion_id: persona.puestoVotacionId,
+        mesa_votacion: persona.mesaVotacion,
+        fecha_expedicion: persona.fechaExpedicion,
+        confirmacion: confirmacion
+          ? {
+              id: confirmacion.id,
+              reversado: confirmacion.reversado,
+            }
+          : undefined,
       }
     })
 
-    // Filter by estado (missing_data/pendiente/confirmado) if provided
-    const fechaExpedicionRequired = process.env.FECHA_EXPEDICION_REQUIRED === 'true'
-    
+    // Filter by estado if provided
     if (estado === 'missing_data') {
-      transformedData = transformedData.filter((persona: any) => {
+      transformedData = transformedData.filter((persona) => {
         const faltaPuestoOMesa = !persona.puesto_votacion_id || !persona.mesa_votacion
         const faltaFechaExpedicion = fechaExpedicionRequired && !persona.fecha_expedicion
         return faltaPuestoOMesa || faltaFechaExpedicion
       })
     } else if (estado === 'confirmed') {
-      transformedData = transformedData.filter((persona: any) => 
-        persona.puesto_votacion_id && persona.mesa_votacion && 
-        (!fechaExpedicionRequired || persona.fecha_expedicion) &&
-        persona.confirmacion && !persona.confirmacion.reversado
+      transformedData = transformedData.filter(
+        (persona) =>
+          persona.puesto_votacion_id &&
+          persona.mesa_votacion &&
+          (!fechaExpedicionRequired || persona.fecha_expedicion) &&
+          persona.confirmacion &&
+          !persona.confirmacion.reversado
       )
     } else if (estado === 'pending') {
-      transformedData = transformedData.filter((persona: any) => 
-        persona.puesto_votacion_id && persona.mesa_votacion &&
-        (!fechaExpedicionRequired || persona.fecha_expedicion) &&
-        (!persona.confirmacion || persona.confirmacion.reversado)
+      transformedData = transformedData.filter(
+        (persona) =>
+          persona.puesto_votacion_id &&
+          persona.mesa_votacion &&
+          (!fechaExpedicionRequired || persona.fecha_expedicion) &&
+          (!persona.confirmacion || persona.confirmacion.reversado)
       )
     }
 
     // Create Excel workbook
     const workbook = new ExcelJS.Workbook()
-
-    // Hoja única: Personas
     const worksheet = workbook.addWorksheet('Personas')
 
-    // Define columns - solo los campos especificados
     worksheet.columns = [
       { header: 'Nombres', key: 'nombres', width: 20 },
       { header: 'Apellidos', key: 'apellidos', width: 20 },
@@ -183,7 +189,6 @@ export async function GET(request: NextRequest) {
       { header: 'Mesa', key: 'mesa', width: 20 },
     ]
 
-    // Style header row
     worksheet.getRow(1).font = { bold: true }
     worksheet.getRow(1).fill = {
       type: 'pattern',
@@ -192,23 +197,21 @@ export async function GET(request: NextRequest) {
     }
     worksheet.getRow(1).height = 25
 
-    // Add data rows
-    transformedData.forEach((persona: any) => {
+    transformedData.forEach((persona) => {
       worksheet.addRow({
         nombres: persona.nombres || '',
         apellidos: persona.apellidos || '',
         cedula: persona.numero_documento || '',
         celular: persona.numero_celular || '',
         direccion: persona.direccion || '',
-        barrio_nombre: persona.barrios?.nombre || '',
-        puesto_nombre: persona.puestos_votacion?.nombre || '',
+        barrio_nombre: persona.barrio?.nombre || '',
+        puesto_nombre: persona.puesto_votacion?.nombre || '',
         mesa: persona.mesa_votacion || '',
       })
     })
 
     const buffer = await workbook.xlsx.writeBuffer()
 
-    // Generate timestamp for filename (DDMMYYYYHHMMSS)
     const now = new Date()
     const day = String(now.getDate()).padStart(2, '0')
     const month = String(now.getMonth() + 1).padStart(2, '0')
@@ -221,16 +224,15 @@ export async function GET(request: NextRequest) {
 
     return new NextResponse(buffer, {
       headers: {
-        'Content-Type':
-          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         'Content-Disposition': `attachment; filename="${filename}"`,
       },
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Error al exportar datos'
     return NextResponse.json(
-      { error: error.message || 'Error al exportar datos' },
-      { status: error.message?.includes('No autenticado') ? 401 : 500 }
+      { error: errorMessage },
+      { status: errorMessage.includes('No autenticado') ? 401 : 500 }
     )
   }
 }
-

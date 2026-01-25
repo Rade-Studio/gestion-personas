@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/admin'
-import { requireCoordinadorOrAdmin, getCurrentProfile, requireConsultorOrAdmin, generateSystemEmail } from '@/lib/auth/helpers'
+import { prisma } from '@/lib/db/prisma'
+import {
+  requireCoordinadorOrAdmin,
+  requireConsultorOrAdmin,
+  generateSystemEmail,
+} from '@/lib/auth/helpers'
+import { hashPassword } from '@/lib/auth/auth'
 import { liderSchema } from '@/features/lideres/validations/lider'
+import type { DocumentoTipo } from '@prisma/client'
 
 export async function GET(
   request: NextRequest,
@@ -17,37 +22,55 @@ export async function GET(
       profile = await requireConsultorOrAdmin()
     }
     const { id } = await params
-    const supabase = await createClient()
 
-    let query = supabase
-      .from('profiles')
-      .select(`
-        *,
-        puesto_votacion:puestos_votacion(id, nombre, codigo),
-        barrio:barrios(id, codigo, nombre)
-      `)
-      .eq('id', id)
-      .eq('role', 'lider')
-
-    // Coordinadores solo pueden ver sus propios líderes
+    const where: Record<string, unknown> = { id, role: 'lider' }
     if (profile.role === 'coordinador') {
-      query = query.eq('coordinador_id', profile.id)
+      where.coordinadorId = profile.id
     }
 
-    const { data, error } = await query.single()
+    const data = await prisma.profile.findFirst({
+      where,
+      include: {
+        puestoVotacion: { select: { id: true, nombre: true, codigo: true } },
+        barrio: { select: { id: true, codigo: true, nombre: true } },
+      },
+    })
 
-    if (error) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: 404 }
-      )
+    if (!data) {
+      return NextResponse.json({ error: 'Líder no encontrado' }, { status: 404 })
     }
 
-    return NextResponse.json({ data })
-  } catch (error: any) {
+    // Transform to match expected format
+    const response = {
+      id: data.id,
+      nombres: data.nombres,
+      apellidos: data.apellidos,
+      tipo_documento: data.tipoDocumento,
+      numero_documento: data.numeroDocumento,
+      fecha_nacimiento: data.fechaNacimiento?.toISOString().split('T')[0],
+      telefono: data.telefono,
+      direccion: data.direccion,
+      barrio_id: data.barrioId,
+      barrio: data.barrio,
+      role: data.role,
+      departamento: data.departamento,
+      municipio: data.municipio,
+      zona: data.zona,
+      candidato_id: data.candidatoId,
+      coordinador_id: data.coordinadorId,
+      puesto_votacion_id: data.puestoVotacionId,
+      puesto_votacion: data.puestoVotacion,
+      mesa_votacion: data.mesaVotacion,
+      created_at: data.createdAt.toISOString(),
+      updated_at: data.updatedAt.toISOString(),
+    }
+
+    return NextResponse.json({ data: response })
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Error en el servidor'
     return NextResponse.json(
-      { error: error.message || 'Error en el servidor' },
-      { status: error.message?.includes('No autorizado') ? 403 : 500 }
+      { error: errorMessage },
+      { status: errorMessage.includes('No autorizado') ? 403 : 500 }
     )
   }
 }
@@ -66,39 +89,33 @@ export async function PUT(
       )
     }
     const { id } = await params
-    const supabase = await createClient()
 
     const body = await request.json()
     const validatedData = liderSchema.parse(body)
 
     // Check if lider exists and belongs to coordinador if applicable
-    let query = supabase
-      .from('profiles')
-      .select('id, numero_documento, coordinador_id')
-      .eq('id', id)
-      .eq('role', 'lider')
-
+    const where: Record<string, unknown> = { id, role: 'lider' }
     if (profile.role === 'coordinador') {
-      query = query.eq('coordinador_id', profile.id)
+      where.coordinadorId = profile.id
     }
 
-    const { data: existing, error: existingError } = await query.single()
+    const existing = await prisma.profile.findFirst({
+      where,
+      select: { id: true, numeroDocumento: true, coordinadorId: true },
+    })
 
-    if (existingError || !existing) {
-      return NextResponse.json(
-        { error: 'Líder no encontrado' },
-        { status: 404 }
-      )
+    if (!existing) {
+      return NextResponse.json({ error: 'Líder no encontrado' }, { status: 404 })
     }
 
     // Check if numero_documento already exists (excluding current record)
-    if (validatedData.numero_documento !== existing.numero_documento) {
-      const { data: duplicate } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('numero_documento', validatedData.numero_documento)
-        .neq('id', id)
-        .single()
+    if (validatedData.numero_documento !== existing.numeroDocumento) {
+      const duplicate = await prisma.profile.findFirst({
+        where: {
+          numeroDocumento: validatedData.numero_documento,
+          id: { not: id },
+        },
+      })
 
       if (duplicate) {
         return NextResponse.json(
@@ -106,91 +123,98 @@ export async function PUT(
           { status: 400 }
         )
       }
-
-      // Si cambió el número de documento, actualizar email y contraseña
-      const adminClient = createAdminClient()
-      const newEmail = generateSystemEmail(validatedData.numero_documento)
-      const { error: updateAuthError } = await adminClient.auth.admin.updateUserById(id, {
-        email: newEmail,
-        password: validatedData.numero_documento,
-      })
-
-      if (updateAuthError) {
-        return NextResponse.json(
-          { error: 'Error al actualizar credenciales: ' + updateAuthError.message },
-          { status: 500 }
-        )
-      }
     }
 
-    // Determine candidato_id: coordinadores mantienen el candidato del coordinador
+    // Determine candidato_id
     let candidatoId = validatedData.candidato_id?.trim() || null
     if (profile.role === 'coordinador') {
-      // Coordinadores: mantener el candidato del coordinador
       candidatoId = profile.candidato_id || null
     } else if (profile.role === 'admin' && validatedData.coordinador_id?.trim()) {
-      // Si admin asigna un coordinador, heredar su candidato
-      const { data: coordinador } = await supabase
-        .from('profiles')
-        .select('candidato_id')
-        .eq('id', validatedData.coordinador_id.trim())
-        .eq('role', 'coordinador')
-        .single()
-      
-      if (coordinador?.candidato_id && !candidatoId) {
-        candidatoId = coordinador.candidato_id
+      const coordinador = await prisma.profile.findFirst({
+        where: {
+          id: validatedData.coordinador_id.trim(),
+          role: 'coordinador',
+        },
+        select: { candidatoId: true },
+      })
+
+      if (coordinador?.candidatoId && !candidatoId) {
+        candidatoId = coordinador.candidatoId
       }
     }
 
-    // Update profile
-    const updateData: any = {
+    // Build update data
+    const updateData: Record<string, unknown> = {
       nombres: validatedData.nombres,
       apellidos: validatedData.apellidos,
-      tipo_documento: validatedData.tipo_documento,
-      numero_documento: validatedData.numero_documento,
-      fecha_nacimiento: validatedData.fecha_nacimiento || null,
+      tipoDocumento: validatedData.tipo_documento as DocumentoTipo,
+      numeroDocumento: validatedData.numero_documento,
+      fechaNacimiento: validatedData.fecha_nacimiento
+        ? new Date(validatedData.fecha_nacimiento)
+        : null,
       telefono: validatedData.telefono || null,
       direccion: validatedData.direccion || null,
-      barrio_id: validatedData.barrio_id || null,
+      barrioId: validatedData.barrio_id || null,
       departamento: validatedData.departamento || null,
       municipio: validatedData.municipio || null,
       zona: validatedData.zona || null,
-      candidato_id: candidatoId,
-      puesto_votacion_id: validatedData.puesto_votacion_id || null,
-      mesa_votacion: validatedData.mesa_votacion || null,
+      candidatoId,
+      puestoVotacionId: validatedData.puesto_votacion_id || null,
+      mesaVotacion: validatedData.mesa_votacion || null,
+    }
+
+    // Update email and password if numero_documento changed
+    if (validatedData.numero_documento !== existing.numeroDocumento) {
+      updateData.email = generateSystemEmail(validatedData.numero_documento)
+      updateData.passwordHash = await hashPassword(validatedData.numero_documento)
     }
 
     // Solo admins pueden cambiar el coordinador_id
     if (profile.role === 'admin' && validatedData.coordinador_id !== undefined) {
-      updateData.coordinador_id = validatedData.coordinador_id?.trim() || null
+      updateData.coordinadorId = validatedData.coordinador_id?.trim() || null
     }
 
-    const { data, error } = await supabase
-      .from('profiles')
-      .update(updateData)
-      .eq('id', id)
-      .select()
-      .single()
+    const data = await prisma.profile.update({
+      where: { id },
+      data: updateData,
+    })
 
-    if (error) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: 500 }
-      )
+    // Transform to match expected format
+    const response = {
+      id: data.id,
+      nombres: data.nombres,
+      apellidos: data.apellidos,
+      tipo_documento: data.tipoDocumento,
+      numero_documento: data.numeroDocumento,
+      fecha_nacimiento: data.fechaNacimiento?.toISOString().split('T')[0],
+      telefono: data.telefono,
+      direccion: data.direccion,
+      barrio_id: data.barrioId,
+      role: data.role,
+      departamento: data.departamento,
+      municipio: data.municipio,
+      zona: data.zona,
+      candidato_id: data.candidatoId,
+      coordinador_id: data.coordinadorId,
+      puesto_votacion_id: data.puestoVotacionId,
+      mesa_votacion: data.mesaVotacion,
+      created_at: data.createdAt.toISOString(),
+      updated_at: data.updatedAt.toISOString(),
     }
 
-    return NextResponse.json({ data })
-  } catch (error: any) {
-    if (error.name === 'ZodError') {
+    return NextResponse.json({ data: response })
+  } catch (error: unknown) {
+    if (error && typeof error === 'object' && 'name' in error && error.name === 'ZodError') {
       return NextResponse.json(
-        { error: 'Datos inválidos', details: error.errors },
+        { error: 'Datos inválidos', details: (error as { errors: unknown }).errors },
         { status: 400 }
       )
     }
 
+    const errorMessage = error instanceof Error ? error.message : 'Error en el servidor'
     return NextResponse.json(
-      { error: error.message || 'Error en el servidor' },
-      { status: error.message?.includes('No autorizado') ? 403 : 500 }
+      { error: errorMessage },
+      { status: errorMessage.includes('No autorizado') ? 403 : 500 }
     )
   }
 }
@@ -209,59 +233,45 @@ export async function DELETE(
       )
     }
     const { id } = await params
-    const supabase = await createClient()
 
     // Check if lider exists and belongs to coordinador if applicable
-    let query = supabase
-      .from('profiles')
-      .select('id')
-      .eq('id', id)
-      .eq('role', 'lider')
-
+    const where: Record<string, unknown> = { id, role: 'lider' }
     if (profile.role === 'coordinador') {
-      query = query.eq('coordinador_id', profile.id)
+      where.coordinadorId = profile.id
     }
 
-    const { data: existing, error: existingError } = await query.single()
+    const existing = await prisma.profile.findFirst({
+      where,
+      select: { id: true },
+    })
 
-    if (existingError || !existing) {
-      return NextResponse.json(
-        { error: 'Líder no encontrado' },
-        { status: 404 }
-      )
+    if (!existing) {
+      return NextResponse.json({ error: 'Líder no encontrado' }, { status: 404 })
     }
 
     // Check if lider has registered personas
-    const { data: personas } = await supabase
-      .from('personas')
-      .select('id')
-      .eq('registrado_por', id)
-      .limit(1)
+    const personasCount = await prisma.persona.count({
+      where: { registradoPorId: id },
+    })
 
-    if (personas && personas.length > 0) {
+    if (personasCount > 0) {
       return NextResponse.json(
         { error: 'No se puede eliminar el líder porque tiene personas registradas' },
         { status: 400 }
       )
     }
 
-    // Delete auth user (this will cascade delete profile due to foreign key)
-    const adminClient = createAdminClient()
-    const { error: deleteError } = await adminClient.auth.admin.deleteUser(id)
-
-    if (deleteError) {
-      return NextResponse.json(
-        { error: 'Error al eliminar usuario: ' + deleteError.message },
-        { status: 500 }
-      )
-    }
+    // Delete profile
+    await prisma.profile.delete({
+      where: { id },
+    })
 
     return NextResponse.json({ success: true })
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Error en el servidor'
     return NextResponse.json(
-      { error: error.message || 'Error en el servidor' },
-      { status: error.message?.includes('No autorizado') ? 403 : 500 }
+      { error: errorMessage },
+      { status: errorMessage.includes('No autorizado') ? 403 : 500 }
     )
   }
 }
-

@@ -1,27 +1,29 @@
 import { NextResponse } from 'next/server'
 import ExcelJS from 'exceljs'
-import { createClient } from '@/lib/supabase/server'
+import { prisma } from '@/lib/db/prisma'
 import { requireLiderOrAdmin } from '@/lib/auth/helpers'
 
 export async function GET() {
   try {
     await requireLiderOrAdmin()
-    const supabase = await createClient()
 
     // Obtener barrios y puestos de votación
-    const [barriosResult, puestosResult] = await Promise.all([
-      supabase.from('barrios').select('codigo, nombre').order('nombre', { ascending: true }),
-      supabase.from('puestos_votacion').select('codigo, nombre, direccion').order('nombre', { ascending: true }),
+    const [barrios, puestos] = await Promise.all([
+      prisma.barrio.findMany({
+        select: { codigo: true, nombre: true },
+        orderBy: { nombre: 'asc' },
+      }),
+      prisma.puestoVotacion.findMany({
+        select: { codigo: true, nombre: true, direccion: true },
+        orderBy: { nombre: 'asc' },
+      }),
     ])
-
-    const barrios = barriosResult.data || []
-    const puestos = puestosResult.data || []
 
     const workbook = new ExcelJS.Workbook()
 
     // Hoja 1: Instrucciones
     const instruccionesSheet = workbook.addWorksheet('Instrucciones')
-    
+
     // Título
     instruccionesSheet.mergeCells('A1:D1')
     instruccionesSheet.getCell('A1').value = 'INSTRUCCIONES PARA IMPORTACIÓN DE PERSONAS'
@@ -37,18 +39,25 @@ export async function GET() {
     const fechaExpedicionRequired = process.env.FECHA_EXPEDICION_REQUIRED === 'true'
     const useDefaultLocation = process.env.NEXT_PUBLIC_USE_DEFAULT_LOCATION === 'true'
     instruccionesSheet.getCell('A4').value = '1. Los campos marcados con * son obligatorios'
-    instruccionesSheet.getCell('A5').value = '2. El formato de fechas debe ser YYYY-MM-DD (ejemplo: 1990-01-15)'
-    instruccionesSheet.getCell('A6').value = fechaExpedicionRequired 
+    instruccionesSheet.getCell('A5').value =
+      '2. El formato de fechas debe ser YYYY-MM-DD (ejemplo: 1990-01-15)'
+    instruccionesSheet.getCell('A6').value = fechaExpedicionRequired
       ? '3. La fecha de expedición es obligatoria'
       : '3. La fecha de expedición es opcional'
-    instruccionesSheet.getCell('A7').value = '4. El tipo de documento es fijo en CC para todas las personas'
+    instruccionesSheet.getCell('A7').value =
+      '4. El tipo de documento es fijo en CC para todas las personas'
     if (useDefaultLocation) {
-      instruccionesSheet.getCell('A8').value = '5. Departamento y Municipio se asignarán automáticamente según la configuración'
-      instruccionesSheet.getCell('A9').value = '6. Para Barrio y Puesto de Votación debe usar el CÓDIGO correspondiente (ver tablas abajo)'
-      instruccionesSheet.getCell('A10').value = '7. Si no conoce el código, puede dejar el campo vacío'
+      instruccionesSheet.getCell('A8').value =
+        '5. Departamento y Municipio se asignarán automáticamente según la configuración'
+      instruccionesSheet.getCell('A9').value =
+        '6. Para Barrio y Puesto de Votación debe usar el CÓDIGO correspondiente (ver tablas abajo)'
+      instruccionesSheet.getCell('A10').value =
+        '7. Si no conoce el código, puede dejar el campo vacío'
     } else {
-      instruccionesSheet.getCell('A8').value = '5. Para Barrio y Puesto de Votación debe usar el CÓDIGO correspondiente (ver tablas abajo)'
-      instruccionesSheet.getCell('A9').value = '6. Si no conoce el código, puede dejar el campo vacío'
+      instruccionesSheet.getCell('A8').value =
+        '5. Para Barrio y Puesto de Votación debe usar el CÓDIGO correspondiente (ver tablas abajo)'
+      instruccionesSheet.getCell('A9').value =
+        '6. Si no conoce el código, puede dejar el campo vacío'
     }
 
     // Espacio
@@ -110,16 +119,16 @@ export async function GET() {
     const worksheet = workbook.addWorksheet('Personas')
 
     // Define columns según configuración
-    const columns: any[] = [
+    const columns: { header: string; key: string; width: number }[] = [
       { header: 'Nombres *', key: 'nombres', width: 20 },
       { header: 'Apellidos *', key: 'apellidos', width: 20 },
     ]
-    
+
     // Solo agregar tipo de documento si no está activo default_location
     if (!useDefaultLocation) {
       columns.push({ header: 'Tipo de Documento *', key: 'tipo_documento', width: 18 })
     }
-    
+
     columns.push(
       { header: 'Número de Documento *', key: 'numero_documento', width: 20 },
       { header: 'Fecha de Nacimiento', key: 'fecha_nacimiento', width: 20 },
@@ -129,7 +138,7 @@ export async function GET() {
       { header: 'Dirección', key: 'direccion', width: 30 },
       { header: 'Código Barrio', key: 'barrio_id', width: 15 }
     )
-    
+
     // Solo agregar departamento y municipio si no está activo default_location
     if (!useDefaultLocation) {
       columns.push(
@@ -137,12 +146,12 @@ export async function GET() {
         { header: 'Municipio', key: 'municipio', width: 20 }
       )
     }
-    
+
     columns.push(
       { header: 'Código Puesto de Votación', key: 'puesto_votacion_id', width: 25 },
       { header: 'Mesa de Votación', key: 'mesa_votacion', width: 20 }
     )
-    
+
     worksheet.columns = columns
 
     // Style header row
@@ -169,16 +178,12 @@ export async function GET() {
 
     return new NextResponse(buffer, {
       headers: {
-        'Content-Type':
-          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         'Content-Disposition': `attachment; filename="${filename}"`,
       },
     })
-  } catch (error: any) {
-    return NextResponse.json(
-      { error: error.message || 'Error al generar plantilla' },
-      { status: 500 }
-    )
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Error al generar plantilla'
+    return NextResponse.json({ error: errorMessage }, { status: 500 })
   }
 }
-

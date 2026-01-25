@@ -32,6 +32,13 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Card, CardContent } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { useAuth } from '@/features/auth/hooks/use-auth'
@@ -50,6 +57,9 @@ export default function PersonasPage() {
   const [importFile, setImportFile] = useState<File | null>(null)
   const [importing, setImporting] = useState(false)
   const [importProgress, setImportProgress] = useState(0)
+  const [importLiderId, setImportLiderId] = useState<string | null>(null)
+  const [importLideres, setImportLideres] = useState<Array<{ id: string; nombres: string; apellidos: string }>>([])
+  const [loadingImportLideres, setLoadingImportLideres] = useState(false)
   const [filters, setFilters] = useState<any>({})
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
@@ -277,6 +287,31 @@ export default function PersonasPage() {
       fetchFilters()
     }
   }, [profile, fetchFilters])
+
+  // Efecto para cargar líderes cuando se abre el diálogo de importación (solo para coordinadores)
+  useEffect(() => {
+    if (importOpen && profile?.role === 'coordinador' && profile?.id) {
+      const fetchImportLideres = async () => {
+        setLoadingImportLideres(true)
+        try {
+          const response = await fetch(`/api/coordinadores/${profile.id}/lideres`)
+          const data = await response.json()
+          if (response.ok) {
+            setImportLideres(data.data || [])
+          }
+        } catch (error) {
+          // Silently fail
+        } finally {
+          setLoadingImportLideres(false)
+        }
+      }
+      fetchImportLideres()
+    } else if (!importOpen) {
+      // Limpiar cuando se cierra el diálogo
+      setImportLiderId(null)
+      setImportLideres([])
+    }
+  }, [importOpen, profile?.role, profile?.id])
 
   const handleCreate = () => {
     setEditingPersona(null)
@@ -524,6 +559,9 @@ export default function PersonasPage() {
 
     const formData = new FormData()
     formData.append('file', importFile)
+    if (importLiderId) {
+      formData.append('lider_id', importLiderId)
+    }
 
     setImporting(true)
     setImportProgress(0)
@@ -577,6 +615,7 @@ export default function PersonasPage() {
       setImportOpen(false)
       setImportFile(null)
       setImportProgress(0)
+      setImportLiderId(null)
       fetchPersonas()
     } catch (error: any) {
       toast.dismiss('import-loading')
@@ -777,6 +816,7 @@ export default function PersonasPage() {
           onSubmit={handleSubmit}
           initialData={editingPersona || undefined}
           loading={saving}
+          profile={profile}
         />
       )}
 
@@ -796,6 +836,7 @@ export default function PersonasPage() {
             if (!open) {
               setImportFile(null)
               setImportProgress(0)
+              setImportLiderId(null)
             }
           }
         }}>
@@ -818,6 +859,32 @@ export default function PersonasPage() {
                 />
               </div>
 
+              {profile?.role === 'coordinador' && importLideres.length > 0 && (
+                <div className="space-y-2">
+                  <Label htmlFor="lider">Asignar a Líder</Label>
+                  <Select
+                    value={importLiderId || 'none'}
+                    onValueChange={(value) => setImportLiderId(value === 'none' ? null : value)}
+                    disabled={importing || loadingImportLideres}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={loadingImportLideres ? 'Cargando...' : 'Seleccionar líder (opcional)'} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Sin asignar (registrar a mi nombre)</SelectItem>
+                      {importLideres.map((lider) => (
+                        <SelectItem key={lider.id} value={lider.id}>
+                          {lider.nombres} {lider.apellidos}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Si no selecciona un líder, las personas se registrarán a su nombre
+                  </p>
+                </div>
+              )}
+
               {importing && (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between text-sm">
@@ -839,6 +906,7 @@ export default function PersonasPage() {
                   setImportOpen(false)
                   setImportFile(null)
                   setImportProgress(0)
+                  setImportLiderId(null)
                 }}
                 disabled={importing}
               >
@@ -987,29 +1055,54 @@ export default function PersonasPage() {
 
               {/* Errors */}
               {importReport.errores && importReport.errores.length > 0 && (
-                <div className="space-y-2 pt-2 border-t">
-                  <div className="flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4 text-muted-foreground" />
-                    <p className="text-sm font-medium">Errores</p>
+                <div className="space-y-3 pt-2 border-t">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="h-4 w-4 text-destructive" />
+                      <p className="text-sm font-medium">Errores detectados ({importReport.errores.length})</p>
+                    </div>
+                    <Badge variant="destructive" className="text-xs">
+                      {importReport.errores.length} {importReport.errores.length === 1 ? 'error' : 'errores'}
+                    </Badge>
                   </div>
-                  <div className="max-h-48 overflow-y-auto space-y-1.5">
+                  <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
                     {importReport.errores.map((error, idx) => (
                       <div
                         key={idx}
-                        className="text-xs p-2.5 rounded border bg-muted/20"
+                        className="text-xs rounded-lg border border-destructive/20 bg-destructive/5 overflow-hidden"
                       >
-                        <div className="flex items-start gap-2 mb-1">
+                        {/* Header del error */}
+                        <div className="flex items-center gap-2 px-3 py-2 bg-destructive/10 border-b border-destructive/20">
                           {error.row && (
-                            <span className="font-medium text-muted-foreground">Fila {error.row}</span>
+                            <Badge variant="outline" className="text-xs font-mono bg-background">
+                              Fila {error.row}
+                            </Badge>
                           )}
                           {error.numero_documento && (
-                            <span className="font-mono text-muted-foreground">{error.numero_documento}</span>
+                            <Badge variant="secondary" className="text-xs font-mono">
+                              Doc: {error.numero_documento}
+                            </Badge>
                           )}
                           {error.tipo && (
-                            <span className="text-muted-foreground">({error.tipo})</span>
+                            <Badge variant="outline" className="text-xs capitalize">
+                              {error.tipo}
+                            </Badge>
                           )}
                         </div>
-                        <p className="text-muted-foreground">{error.error}</p>
+                        {/* Detalle del error */}
+                        <div className="px-3 py-2">
+                          {error.error.includes(' | ') ? (
+                            <ul className="space-y-1 list-disc list-inside">
+                              {error.error.split(' | ').map((err, i) => (
+                                <li key={i} className="text-destructive/90">
+                                  {err}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="text-destructive/90">{error.error}</p>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>

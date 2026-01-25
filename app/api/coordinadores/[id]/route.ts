@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { prisma } from '@/lib/db/prisma'
 import { requireAdmin, requireConsultorOrAdmin, generateSystemEmail } from '@/lib/auth/helpers'
+import { hashPassword } from '@/lib/auth/auth'
 import { coordinadorSchema } from '@/features/coordinadores/validations/coordinador'
+import type { DocumentoTipo } from '@prisma/client'
 
 export async function GET(
   request: NextRequest,
@@ -16,30 +17,45 @@ export async function GET(
       await requireConsultorOrAdmin()
     }
     const { id } = await params
-    const supabase = await createClient()
 
-    const { data, error } = await supabase
-      .from('profiles')
-      .select(`
-        *,
-        candidato:candidatos(id, nombre_completo)
-      `)
-      .eq('id', id)
-      .eq('role', 'coordinador')
-      .single()
+    const data = await prisma.profile.findFirst({
+      where: { id, role: 'coordinador' },
+      include: {
+        candidato: { select: { id: true, nombreCompleto: true } },
+      },
+    })
 
-    if (error) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: 404 }
-      )
+    if (!data) {
+      return NextResponse.json({ error: 'Coordinador no encontrado' }, { status: 404 })
     }
 
-    return NextResponse.json({ data })
-  } catch (error: any) {
+    // Transform to match expected format
+    const response = {
+      id: data.id,
+      nombres: data.nombres,
+      apellidos: data.apellidos,
+      tipo_documento: data.tipoDocumento,
+      numero_documento: data.numeroDocumento,
+      fecha_nacimiento: data.fechaNacimiento?.toISOString().split('T')[0],
+      telefono: data.telefono,
+      role: data.role,
+      departamento: data.departamento,
+      municipio: data.municipio,
+      zona: data.zona,
+      candidato_id: data.candidatoId,
+      candidato: data.candidato
+        ? { id: data.candidato.id, nombre_completo: data.candidato.nombreCompleto }
+        : null,
+      created_at: data.createdAt.toISOString(),
+      updated_at: data.updatedAt.toISOString(),
+    }
+
+    return NextResponse.json({ data: response })
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Error en el servidor'
     return NextResponse.json(
-      { error: error.message || 'Error en el servidor' },
-      { status: error.message?.includes('No autorizado') ? 403 : 500 }
+      { error: errorMessage },
+      { status: errorMessage.includes('No autorizado') ? 403 : 500 }
     )
   }
 }
@@ -52,34 +68,28 @@ export async function PUT(
     // Solo admins pueden modificar coordinadores
     await requireAdmin()
     const { id } = await params
-    const supabase = await createClient()
 
     const body = await request.json()
     const validatedData = coordinadorSchema.parse(body)
 
     // Check if coordinador exists
-    const { data: existing } = await supabase
-      .from('profiles')
-      .select('id, numero_documento')
-      .eq('id', id)
-      .eq('role', 'coordinador')
-      .single()
+    const existing = await prisma.profile.findFirst({
+      where: { id, role: 'coordinador' },
+      select: { id: true, numeroDocumento: true },
+    })
 
     if (!existing) {
-      return NextResponse.json(
-        { error: 'Coordinador no encontrado' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: 'Coordinador no encontrado' }, { status: 404 })
     }
 
     // Check if numero_documento already exists (excluding current record)
-    if (validatedData.numero_documento !== existing.numero_documento) {
-      const { data: duplicate } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('numero_documento', validatedData.numero_documento)
-        .neq('id', id)
-        .single()
+    if (validatedData.numero_documento !== existing.numeroDocumento) {
+      const duplicate = await prisma.profile.findFirst({
+        where: {
+          numeroDocumento: validatedData.numero_documento,
+          id: { not: id },
+        },
+      })
 
       if (duplicate) {
         return NextResponse.json(
@@ -87,62 +97,66 @@ export async function PUT(
           { status: 400 }
         )
       }
-
-      // Si cambió el número de documento, actualizar email y contraseña
-      const adminClient = createAdminClient()
-      const newEmail = generateSystemEmail(validatedData.numero_documento)
-      const { error: updateAuthError } = await adminClient.auth.admin.updateUserById(id, {
-        email: newEmail,
-        password: validatedData.numero_documento,
-      })
-
-      if (updateAuthError) {
-        return NextResponse.json(
-          { error: 'Error al actualizar credenciales: ' + updateAuthError.message },
-          { status: 500 }
-        )
-      }
     }
 
-    // Update profile
-    const candidatoId = validatedData.candidato_id?.trim() || null
-    const { data, error } = await supabase
-      .from('profiles')
-      .update({
-        nombres: validatedData.nombres,
-        apellidos: validatedData.apellidos,
-        tipo_documento: validatedData.tipo_documento,
-        numero_documento: validatedData.numero_documento,
-        fecha_nacimiento: validatedData.fecha_nacimiento || null,
-        telefono: validatedData.telefono || null,
-        departamento: validatedData.departamento || null,
-        municipio: validatedData.municipio || null,
-        zona: validatedData.zona || null,
-        candidato_id: candidatoId,
-      })
-      .eq('id', id)
-      .select()
-      .single()
-
-    if (error) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: 500 }
-      )
+    // Build update data
+    const updateData: Record<string, unknown> = {
+      nombres: validatedData.nombres,
+      apellidos: validatedData.apellidos,
+      tipoDocumento: validatedData.tipo_documento as DocumentoTipo,
+      numeroDocumento: validatedData.numero_documento,
+      fechaNacimiento: validatedData.fecha_nacimiento
+        ? new Date(validatedData.fecha_nacimiento)
+        : null,
+      telefono: validatedData.telefono || null,
+      departamento: validatedData.departamento || null,
+      municipio: validatedData.municipio || null,
+      zona: validatedData.zona || null,
+      candidatoId: validatedData.candidato_id?.trim() || null,
     }
 
-    return NextResponse.json({ data })
-  } catch (error: any) {
-    if (error.name === 'ZodError') {
+    // Update email and password if numero_documento changed
+    if (validatedData.numero_documento !== existing.numeroDocumento) {
+      updateData.email = generateSystemEmail(validatedData.numero_documento)
+      updateData.passwordHash = await hashPassword(validatedData.numero_documento)
+    }
+
+    const data = await prisma.profile.update({
+      where: { id },
+      data: updateData,
+    })
+
+    // Transform to match expected format
+    const response = {
+      id: data.id,
+      nombres: data.nombres,
+      apellidos: data.apellidos,
+      tipo_documento: data.tipoDocumento,
+      numero_documento: data.numeroDocumento,
+      fecha_nacimiento: data.fechaNacimiento?.toISOString().split('T')[0],
+      telefono: data.telefono,
+      role: data.role,
+      departamento: data.departamento,
+      municipio: data.municipio,
+      zona: data.zona,
+      candidato_id: data.candidatoId,
+      created_at: data.createdAt.toISOString(),
+      updated_at: data.updatedAt.toISOString(),
+    }
+
+    return NextResponse.json({ data: response })
+  } catch (error: unknown) {
+    if (error && typeof error === 'object' && 'name' in error && error.name === 'ZodError') {
       return NextResponse.json(
-        { error: 'Datos inválidos', details: error.errors },
+        { error: 'Datos inválidos', details: (error as { errors: unknown }).errors },
         { status: 400 }
       )
     }
 
+    const errorMessage = error instanceof Error ? error.message : 'Error en el servidor'
     return NextResponse.json(
-      { error: error.message || 'Error en el servidor' },
-      { status: error.message?.includes('No autorizado') ? 403 : 500 }
+      { error: errorMessage },
+      { status: errorMessage.includes('No autorizado') ? 403 : 500 }
     )
   }
 }
@@ -155,31 +169,23 @@ export async function DELETE(
     // Solo admins pueden eliminar coordinadores
     await requireAdmin()
     const { id } = await params
-    const supabase = await createClient()
 
     // Check if coordinador exists
-    const { data: existing } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('id', id)
-      .eq('role', 'coordinador')
-      .single()
+    const existing = await prisma.profile.findFirst({
+      where: { id, role: 'coordinador' },
+      select: { id: true },
+    })
 
     if (!existing) {
-      return NextResponse.json(
-        { error: 'Coordinador no encontrado' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: 'Coordinador no encontrado' }, { status: 404 })
     }
 
     // Check if coordinador has registered personas
-    const { data: personas } = await supabase
-      .from('personas')
-      .select('id')
-      .eq('registrado_por', id)
-      .limit(1)
+    const personasCount = await prisma.persona.count({
+      where: { registradoPorId: id },
+    })
 
-    if (personas && personas.length > 0) {
+    if (personasCount > 0) {
       return NextResponse.json(
         { error: 'No se puede eliminar el coordinador porque tiene personas registradas' },
         { status: 400 }
@@ -187,36 +193,28 @@ export async function DELETE(
     }
 
     // Check if coordinador has leaders
-    const { data: lideres } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('coordinador_id', id)
-      .limit(1)
+    const lideresCount = await prisma.profile.count({
+      where: { coordinadorId: id },
+    })
 
-    if (lideres && lideres.length > 0) {
+    if (lideresCount > 0) {
       return NextResponse.json(
         { error: 'No se puede eliminar el coordinador porque tiene líderes asignados' },
         { status: 400 }
       )
     }
 
-    // Delete auth user (this will cascade delete profile due to foreign key)
-    const adminClient = createAdminClient()
-    const { error: deleteError } = await adminClient.auth.admin.deleteUser(id)
-
-    if (deleteError) {
-      return NextResponse.json(
-        { error: 'Error al eliminar usuario: ' + deleteError.message },
-        { status: 500 }
-      )
-    }
+    // Delete profile
+    await prisma.profile.delete({
+      where: { id },
+    })
 
     return NextResponse.json({ success: true })
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Error en el servidor'
     return NextResponse.json(
-      { error: error.message || 'Error en el servidor' },
-      { status: error.message?.includes('No autorizado') ? 403 : 500 }
+      { error: errorMessage },
+      { status: errorMessage.includes('No autorizado') ? 403 : 500 }
     )
   }
 }
-

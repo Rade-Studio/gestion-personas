@@ -1,0 +1,272 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+enum DocumentoTipo {
+  CC
+  CE
+  Pasaporte
+  TI
+  Otro
+}
+
+enum UserRole {
+  admin
+  coordinador
+  lider
+  consultor
+}
+
+// ============================================================================
+// AUTH.JS MODELS
+// ============================================================================
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String  @map("user_id")
+  type              String
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique @map("session_token")
+  userId       String   @map("user_id")
+  expires      DateTime
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ============================================================================
+// APPLICATION MODELS
+// ============================================================================
+
+model Profile {
+  id               String       @id @default(uuid())
+  email            String?      @unique
+  passwordHash     String?      @map("password_hash")
+  nombres          String
+  apellidos        String
+  tipoDocumento    DocumentoTipo @map("tipo_documento")
+  numeroDocumento  String       @unique @map("numero_documento")
+  fechaNacimiento  DateTime?    @map("fecha_nacimiento") @db.Date
+  telefono         String?
+  direccion        String?
+  role             UserRole     @default(lider)
+  departamento     String?
+  municipio        String?
+  zona             String?
+  mesaVotacion     String?      @map("mesa_votacion")
+  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime     @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  candidatoId      String?      @map("candidato_id")
+  candidato        Candidato?   @relation(fields: [candidatoId], references: [id], onDelete: SetNull)
+  
+  coordinadorId    String?      @map("coordinador_id")
+  coordinador      Profile?     @relation("CoordinadorLideres", fields: [coordinadorId], references: [id], onDelete: SetNull)
+  lideres          Profile[]    @relation("CoordinadorLideres")
+  
+  barrioId         Int?         @map("barrio_id")
+  barrio           Barrio?      @relation(fields: [barrioId], references: [id])
+  
+  puestoVotacionId Int?         @map("puesto_votacion_id")
+  puestoVotacion   PuestoVotacion? @relation(fields: [puestoVotacionId], references: [id])
+
+  // Auth.js relations
+  accounts         Account[]
+  sessions         Session[]
+
+  // Back relations
+  personasRegistradas      Persona[]          @relation("PersonaRegistradaPor")
+  confirmacionesRealizadas VotoConfirmacion[] @relation("ConfirmadoPor")
+  confirmacionesReversadas VotoConfirmacion[] @relation("ReversadoPor")
+  importaciones            Importacion[]
+
+  @@index([role])
+  @@index([numeroDocumento])
+  @@index([candidatoId])
+  @@index([coordinadorId])
+  @@index([departamento])
+  @@index([municipio])
+  @@index([zona])
+  @@index([barrioId])
+  @@index([puestoVotacionId])
+  @@map("profiles")
+}
+
+model Persona {
+  id               String        @id @default(uuid())
+  nombres          String
+  apellidos        String
+  tipoDocumento    DocumentoTipo @default(CC) @map("tipo_documento")
+  numeroDocumento  String        @unique @map("numero_documento")
+  fechaNacimiento  DateTime?     @map("fecha_nacimiento") @db.Date
+  fechaExpedicion  DateTime?     @map("fecha_expedicion") @db.Date
+  profesion        String?
+  edad             Int?
+  numeroCelular    String?       @map("numero_celular")
+  direccion        String?
+  departamento     String?
+  municipio        String?
+  mesaVotacion     String?       @map("mesa_votacion")
+  esImportado      Boolean       @default(false) @map("es_importado")
+  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime      @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  registradoPorId  String        @map("registrado_por")
+  registradoPor    Profile       @relation("PersonaRegistradaPor", fields: [registradoPorId], references: [id], onDelete: Cascade)
+  
+  barrioId         Int?          @map("barrio_id")
+  barrio           Barrio?       @relation(fields: [barrioId], references: [id])
+  
+  puestoVotacionId Int?          @map("puesto_votacion_id")
+  puestoVotacion   PuestoVotacion? @relation(fields: [puestoVotacionId], references: [id])
+  
+  importacionId    String?       @map("importacion_id")
+  importacion      Importacion?  @relation(fields: [importacionId], references: [id], onDelete: SetNull)
+
+  // Back relations
+  confirmaciones   VotoConfirmacion[]
+
+  @@index([numeroDocumento])
+  @@index([registradoPorId])
+  @@index([esImportado])
+  @@index([barrioId])
+  @@index([puestoVotacionId])
+  @@index([departamento])
+  @@index([municipio])
+  @@map("personas")
+}
+
+model VotoConfirmacion {
+  id            String    @id @default(uuid())
+  imagenUrl     String    @map("imagen_url")
+  imagenPath    String    @map("imagen_path")
+  confirmadoAt  DateTime  @default(now()) @map("confirmado_at") @db.Timestamptz
+  reversado     Boolean   @default(false)
+  reversadoAt   DateTime? @map("reversado_at") @db.Timestamptz
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  personaId     String    @map("persona_id")
+  persona       Persona   @relation(fields: [personaId], references: [id], onDelete: Cascade)
+  
+  confirmadoPorId String  @map("confirmado_por")
+  confirmadoPor Profile   @relation("ConfirmadoPor", fields: [confirmadoPorId], references: [id], onDelete: Cascade)
+  
+  reversadoPorId String?  @map("reversado_por")
+  reversadoPor  Profile?  @relation("ReversadoPor", fields: [reversadoPorId], references: [id])
+
+  @@index([personaId])
+  @@index([reversado])
+  @@map("voto_confirmaciones")
+}
+
+model Importacion {
+  id                 String   @id @default(uuid())
+  totalRegistros     Int      @map("total_registros")
+  registrosExitosos  Int      @default(0) @map("registros_exitosos")
+  registrosFallidos  Int      @default(0) @map("registros_fallidos")
+  archivoNombre      String?  @map("archivo_nombre")
+  errores            Json?
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  usuarioId          String   @map("usuario_id")
+  usuario            Profile  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  // Back relations
+  personas           Persona[]
+
+  @@map("importaciones")
+}
+
+model Candidato {
+  id             String    @id @default(uuid())
+  nombreCompleto String    @map("nombre_completo")
+  numeroTarjeton String    @unique @map("numero_tarjeton")
+  imagenUrl      String?   @map("imagen_url")
+  imagenPath     String?   @map("imagen_path")
+  partidoGrupo   String?   @map("partido_grupo")
+  esPorDefecto   Boolean   @default(false) @map("es_por_defecto")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Back relations
+  profiles       Profile[]
+
+  @@index([numeroTarjeton])
+  @@index([esPorDefecto])
+  @@map("candidatos")
+}
+
+model Barrio {
+  id        Int      @id @default(autoincrement())
+  codigo    String   @unique
+  nombre    String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Back relations
+  personas  Persona[]
+  profiles  Profile[]
+
+  @@index([codigo])
+  @@map("barrios")
+}
+
+model PuestoVotacion {
+  id        Int      @id @default(autoincrement())
+  codigo    String   @unique
+  nombre    String
+  direccion String?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Back relations
+  personas  Persona[]
+  profiles  Profile[]
+
+  @@index([codigo])
+  @@map("puestos_votacion")
+}

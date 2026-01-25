@@ -1,12 +1,11 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState, useMemo, useRef } from 'react'
-import { createClient } from '@/lib/supabase/client'
-import type { User } from '@supabase/supabase-js'
+import { createContext, useContext, useMemo } from 'react'
+import { useSession, signOut as nextAuthSignOut } from 'next-auth/react'
 import type { Profile } from '@/lib/types'
 
 interface AuthContextType {
-  user: User | null
+  user: { id: string; email: string } | null
   profile: Profile | null
   loading: boolean
   signOut: () => Promise<void>
@@ -20,146 +19,47 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
-  const [profile, setProfile] = useState<Profile | null>(null)
-  const [loading, setLoading] = useState(true)
-  const supabase = createClient()
-  const signOutInProgressRef = useRef(false)
+  const { data: session, status, update } = useSession()
 
-  useEffect(() => {
-    let mounted = true
+  const loading = status === 'loading'
+  const user = session?.user ? { id: session.user.id, email: session.user.email || '' } : null
 
-    const getUser = async () => {
-      try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser()
-
-        if (!mounted) return
-
-        setUser(user)
-
-        if (user) {
-          const { data: profileData, error: profileError } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', user.id)
-            .single()
-
-          if (profileError) {
-            console.error('Error al obtener perfil:', profileError)
-          }
-
-          if (mounted) {
-            setProfile(profileData)
-          }
-        } else {
-          setProfile(null)
-        }
-      } catch (error) {
-        console.error('Error en getUser:', error)
-      } finally {
-        if (mounted) {
-          setLoading(false)
-        }
+  // Map session user to Profile type
+  const profile: Profile | null = session?.user
+    ? {
+        id: session.user.id,
+        nombres: session.user.nombres,
+        apellidos: session.user.apellidos,
+        tipo_documento: session.user.tipoDocumento as Profile['tipo_documento'],
+        numero_documento: session.user.numeroDocumento,
+        telefono: session.user.telefono || undefined,
+        direccion: session.user.direccion || undefined,
+        barrio_id: session.user.barrioId || undefined,
+        role: session.user.role as Profile['role'],
+        departamento: session.user.departamento || undefined,
+        municipio: session.user.municipio || undefined,
+        zona: session.user.zona || undefined,
+        candidato_id: session.user.candidatoId || undefined,
+        coordinador_id: session.user.coordinadorId || undefined,
+        puesto_votacion_id: session.user.puestoVotacionId || undefined,
+        mesa_votacion: session.user.mesaVotacion || undefined,
+        created_at: '',
+        updated_at: '',
       }
-    }
-
-    getUser()
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!mounted) return
-
-      setUser(session?.user ?? null)
-      if (session?.user) {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .single()
-
-        if (error) {
-          console.error('Error al obtener perfil en auth change:', error)
-        }
-
-        if (mounted) {
-          setProfile(data)
-        }
-      } else {
-        setProfile(null)
-        // No redirigir automáticamente aquí para evitar conflictos con la redirección
-        // manejada en main-layout.tsx. El logout debe ser manejado explícitamente.
-      }
-    })
-
-    return () => {
-      mounted = false
-      subscription.unsubscribe()
-    }
-  }, [supabase])
+    : null
 
   const signOut = async () => {
-    // Protección contra múltiples llamadas simultáneas
-    if (signOutInProgressRef.current) {
-      return
-    }
-
-    signOutInProgressRef.current = true
-
-    try {
-      // Timeout de 2 segundos para evitar bloqueos
-      const signOutPromise = Promise.race([
-        supabase.auth.signOut(),
-        new Promise<{ error: null }>((resolve) => 
-          setTimeout(() => resolve({ error: null }), 2000)
-        )
-      ])
-
-      const { error } = await signOutPromise
-      
-      if (error) {
-        console.error('Error al cerrar sesión:', error)
-      }
-      
-      // Limpiar estado local siempre, incluso si hay error
-      setUser(null)
-      setProfile(null)
-    } catch (error) {
-      console.error('Error al cerrar sesión:', error)
-      // Aún así limpiamos el estado local
-      setUser(null)
-      setProfile(null)
-    } finally {
-      // Resetear el flag después de un pequeño delay para permitir que se complete
-      setTimeout(() => {
-        signOutInProgressRef.current = false
-      }, 100)
-    }
+    await nextAuthSignOut({ callbackUrl: '/auth/login', redirect: true })
   }
 
   const refreshProfile = async () => {
-    if (!user) return
-
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single()
-
-    if (error) {
-      console.error('Error al refrescar perfil:', error)
-      return
-    }
-
-    setProfile(data)
+    await update()
   }
 
-  const isAdmin = useMemo(() => profile?.role === 'admin', [profile?.role])
-  const isCoordinador = useMemo(() => profile?.role === 'coordinador', [profile?.role])
-  const isLider = useMemo(() => profile?.role === 'lider', [profile?.role])
-  const isConsultor = useMemo(() => profile?.role === 'consultor', [profile?.role])
+  const isAdmin = profile?.role === 'admin'
+  const isCoordinador = profile?.role === 'coordinador'
+  const isLider = profile?.role === 'lider'
+  const isConsultor = profile?.role === 'consultor'
 
   const value = useMemo(
     () => ({
@@ -186,4 +86,3 @@ export function useAuth() {
   }
   return context
 }
-

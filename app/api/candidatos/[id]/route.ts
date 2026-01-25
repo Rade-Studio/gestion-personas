@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { prisma } from '@/lib/db/prisma'
 import { requireAdmin } from '@/lib/auth/helpers'
 import { candidatoSchema } from '@/features/candidatos/validations/candidato'
+import { uploadFile, deleteFile, isValidImage, isValidFileSize } from '@/lib/storage/client'
 
 export async function GET(
   request: NextRequest,
@@ -10,26 +11,34 @@ export async function GET(
   try {
     await requireAdmin()
     const { id } = await params
-    const supabase = await createClient()
 
-    const { data, error } = await supabase
-      .from('candidatos')
-      .select('*')
-      .eq('id', id)
-      .single()
+    const candidato = await prisma.candidato.findUnique({
+      where: { id },
+    })
 
-    if (error) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: 404 }
-      )
+    if (!candidato) {
+      return NextResponse.json({ error: 'Candidato no encontrado' }, { status: 404 })
+    }
+
+    // Transform to match expected format
+    const data = {
+      id: candidato.id,
+      nombre_completo: candidato.nombreCompleto,
+      numero_tarjeton: candidato.numeroTarjeton,
+      imagen_url: candidato.imagenUrl,
+      imagen_path: candidato.imagenPath,
+      partido_grupo: candidato.partidoGrupo,
+      es_por_defecto: candidato.esPorDefecto,
+      created_at: candidato.createdAt.toISOString(),
+      updated_at: candidato.updatedAt.toISOString(),
     }
 
     return NextResponse.json({ data })
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Error en el servidor'
     return NextResponse.json(
-      { error: error.message || 'Error en el servidor' },
-      { status: error.message?.includes('No autorizado') ? 403 : 500 }
+      { error: errorMessage },
+      { status: errorMessage.includes('No autorizado') ? 403 : 500 }
     )
   }
 }
@@ -41,20 +50,14 @@ export async function PUT(
   try {
     await requireAdmin()
     const { id } = await params
-    const supabase = await createClient()
 
     // Check if candidato exists
-    const { data: existing } = await supabase
-      .from('candidatos')
-      .select('*')
-      .eq('id', id)
-      .single()
+    const existing = await prisma.candidato.findUnique({
+      where: { id },
+    })
 
     if (!existing) {
-      return NextResponse.json(
-        { error: 'Candidato no encontrado' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: 'Candidato no encontrado' }, { status: 404 })
     }
 
     const formData = await request.formData()
@@ -74,13 +77,13 @@ export async function PUT(
     })
 
     // Check if numero_tarjeton already exists (excluding current record)
-    if (validatedData.numero_tarjeton !== existing.numero_tarjeton) {
-      const { data: duplicate } = await supabase
-        .from('candidatos')
-        .select('id')
-        .eq('numero_tarjeton', validatedData.numero_tarjeton)
-        .neq('id', id)
-        .single()
+    if (validatedData.numero_tarjeton !== existing.numeroTarjeton) {
+      const duplicate = await prisma.candidato.findFirst({
+        where: {
+          numeroTarjeton: validatedData.numero_tarjeton,
+          id: { not: id },
+        },
+      })
 
       if (duplicate) {
         return NextResponse.json(
@@ -91,27 +94,26 @@ export async function PUT(
     }
 
     // If marking as default, unmark other candidates
-    if (validatedData.es_por_defecto && !existing.es_por_defecto) {
-      const { error: unmarkError } = await supabase
-        .from('candidatos')
-        .update({ es_por_defecto: false })
-        .eq('es_por_defecto', true)
-        .neq('id', id)
-
-      if (unmarkError) {
-        return NextResponse.json(
-          { error: 'Error al actualizar candidatos por defecto: ' + unmarkError.message },
-          { status: 500 }
-        )
-      }
+    if (validatedData.es_por_defecto && !existing.esPorDefecto) {
+      await prisma.candidato.updateMany({
+        where: {
+          esPorDefecto: true,
+          id: { not: id },
+        },
+        data: { esPorDefecto: false },
+      })
     }
 
-    let imagenUrl: string | null | undefined = existing.imagen_url
-    let imagenPath: string | null | undefined = existing.imagen_path
+    let imagenUrl: string | null | undefined = existing.imagenUrl
+    let imagenPath: string | null | undefined = existing.imagenPath
 
     // Handle image removal
-    if (removeImage && existing.imagen_path) {
-      await supabase.storage.from('candidatos-imagenes').remove([existing.imagen_path])
+    if (removeImage && existing.imagenPath) {
+      try {
+        await deleteFile(existing.imagenPath)
+      } catch {
+        // Ignore delete error
+      }
       imagenUrl = null
       imagenPath = null
     }
@@ -119,86 +121,83 @@ export async function PUT(
     // Upload new image if provided
     if (imagen) {
       // Delete old image if exists
-      if (existing.imagen_path) {
-        await supabase.storage.from('candidatos-imagenes').remove([existing.imagen_path])
+      if (existing.imagenPath) {
+        try {
+          await deleteFile(existing.imagenPath)
+        } catch {
+          // Ignore delete error
+        }
       }
 
       // Validate file type
-      if (!imagen.type.startsWith('image/')) {
-        return NextResponse.json(
-          { error: 'El archivo debe ser una imagen' },
-          { status: 400 }
-        )
+      if (!isValidImage(imagen)) {
+        return NextResponse.json({ error: 'El archivo debe ser una imagen' }, { status: 400 })
       }
 
       // Validate file size (5MB)
-      if (imagen.size > 5 * 1024 * 1024) {
-        return NextResponse.json(
-          { error: 'La imagen no debe exceder 5MB' },
-          { status: 400 }
-        )
+      if (!isValidFileSize(imagen, 5 * 1024 * 1024)) {
+        return NextResponse.json({ error: 'La imagen no debe exceder 5MB' }, { status: 400 })
       }
 
       const fileExt = imagen.name.split('.').pop()
       const fileName = `${Date.now()}-${validatedData.numero_tarjeton}.${fileExt}`
       const filePath = `candidatos/${fileName}`
 
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('candidatos-imagenes')
-        .upload(filePath, imagen, {
-          cacheControl: '3600',
-          upsert: false,
-        })
-
-      if (uploadError) {
+      try {
+        const result = await uploadFile(imagen, filePath, imagen.type)
+        imagenUrl = result.url
+        imagenPath = result.path
+      } catch (uploadError) {
         return NextResponse.json(
-          { error: 'Error al subir la imagen: ' + uploadError.message },
+          {
+            error:
+              'Error al subir la imagen: ' +
+              (uploadError instanceof Error ? uploadError.message : 'Error desconocido'),
+          },
           { status: 500 }
         )
       }
-
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from('candidatos-imagenes').getPublicUrl(filePath)
-
-      imagenUrl = publicUrl
-      imagenPath = filePath
     }
 
     // Update candidato
-    const { data: candidato, error: candidatoError } = await supabase
-      .from('candidatos')
-      .update({
-        nombre_completo: validatedData.nombre_completo,
-        numero_tarjeton: validatedData.numero_tarjeton,
-        partido_grupo: validatedData.partido_grupo || null,
-        es_por_defecto: validatedData.es_por_defecto,
-        imagen_url: imagenUrl,
-        imagen_path: imagenPath,
-      })
-      .eq('id', id)
-      .select()
-      .single()
+    const candidato = await prisma.candidato.update({
+      where: { id },
+      data: {
+        nombreCompleto: validatedData.nombre_completo,
+        numeroTarjeton: validatedData.numero_tarjeton,
+        partidoGrupo: validatedData.partido_grupo || null,
+        esPorDefecto: validatedData.es_por_defecto,
+        imagenUrl,
+        imagenPath,
+      },
+    })
 
-    if (candidatoError) {
-      return NextResponse.json(
-        { error: 'Error al actualizar candidato: ' + candidatoError.message },
-        { status: 500 }
-      )
+    // Transform to match expected format
+    const response = {
+      id: candidato.id,
+      nombre_completo: candidato.nombreCompleto,
+      numero_tarjeton: candidato.numeroTarjeton,
+      imagen_url: candidato.imagenUrl,
+      imagen_path: candidato.imagenPath,
+      partido_grupo: candidato.partidoGrupo,
+      es_por_defecto: candidato.esPorDefecto,
+      created_at: candidato.createdAt.toISOString(),
+      updated_at: candidato.updatedAt.toISOString(),
     }
 
-    return NextResponse.json({ data: candidato })
-  } catch (error: any) {
-    if (error.name === 'ZodError') {
+    return NextResponse.json({ data: response })
+  } catch (error: unknown) {
+    if (error && typeof error === 'object' && 'name' in error && error.name === 'ZodError') {
       return NextResponse.json(
-        { error: 'Datos inválidos', details: error.errors },
+        { error: 'Datos inválidos', details: (error as { errors: unknown }).errors },
         { status: 400 }
       )
     }
 
+    const errorMessage = error instanceof Error ? error.message : 'Error en el servidor'
     return NextResponse.json(
-      { error: error.message || 'Error en el servidor' },
-      { status: error.message?.includes('No autorizado') ? 403 : 500 }
+      { error: errorMessage },
+      { status: errorMessage.includes('No autorizado') ? 403 : 500 }
     )
   }
 }
@@ -210,24 +209,19 @@ export async function DELETE(
   try {
     await requireAdmin()
     const { id } = await params
-    const supabase = await createClient()
 
     // Check if candidato exists
-    const { data: existing } = await supabase
-      .from('candidatos')
-      .select('id, es_por_defecto, imagen_path')
-      .eq('id', id)
-      .single()
+    const existing = await prisma.candidato.findUnique({
+      where: { id },
+      select: { id: true, esPorDefecto: true, imagenPath: true },
+    })
 
     if (!existing) {
-      return NextResponse.json(
-        { error: 'Candidato no encontrado' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: 'Candidato no encontrado' }, { status: 404 })
     }
 
     // Prevent deletion if it's the default candidate
-    if (existing.es_por_defecto) {
+    if (existing.esPorDefecto) {
       return NextResponse.json(
         { error: 'No se puede eliminar el candidato por defecto' },
         { status: 400 }
@@ -235,35 +229,31 @@ export async function DELETE(
     }
 
     // Delete image if exists
-    if (existing.imagen_path) {
-      await supabase.storage.from('candidatos-imagenes').remove([existing.imagen_path])
+    if (existing.imagenPath) {
+      try {
+        await deleteFile(existing.imagenPath)
+      } catch {
+        // Ignore delete error
+      }
     }
 
     // Unassign candidato from all leaders (set candidato_id to NULL)
-    await supabase
-      .from('profiles')
-      .update({ candidato_id: null })
-      .eq('candidato_id', id)
+    await prisma.profile.updateMany({
+      where: { candidatoId: id },
+      data: { candidatoId: null },
+    })
 
     // Delete candidato
-    const { error: deleteError } = await supabase
-      .from('candidatos')
-      .delete()
-      .eq('id', id)
-
-    if (deleteError) {
-      return NextResponse.json(
-        { error: 'Error al eliminar candidato: ' + deleteError.message },
-        { status: 500 }
-      )
-    }
+    await prisma.candidato.delete({
+      where: { id },
+    })
 
     return NextResponse.json({ success: true })
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Error en el servidor'
     return NextResponse.json(
-      { error: error.message || 'Error en el servidor' },
-      { status: error.message?.includes('No autorizado') ? 403 : 500 }
+      { error: errorMessage },
+      { status: errorMessage.includes('No autorizado') ? 403 : 500 }
     )
   }
 }
-

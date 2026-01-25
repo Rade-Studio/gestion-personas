@@ -1,31 +1,28 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/db/prisma'
 import { requireLiderOrAdmin } from '@/lib/auth/helpers'
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     await requireLiderOrAdmin()
-    const supabase = await createClient()
 
-    const { data, error } = await supabase
-      .from('puestos_votacion')
-      .select('id, codigo, nombre, direccion')
-      .order('nombre', { ascending: true })
-
-    if (error) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: 500 }
-      )
-    }
-
-    return NextResponse.json({
-      data: data || [],
+    const data = await prisma.puestoVotacion.findMany({
+      select: {
+        id: true,
+        codigo: true,
+        nombre: true,
+        direccion: true,
+      },
+      orderBy: { nombre: 'asc' },
     })
-  } catch (error: any) {
+
+    return NextResponse.json({ data })
+  } catch (error: unknown) {
+    const errorMessage =
+      error instanceof Error ? error.message : 'Error al obtener puestos de votación'
     return NextResponse.json(
-      { error: error.message || 'Error al obtener puestos de votación' },
-      { status: error.message?.includes('No autenticado') ? 401 : 500 }
+      { error: errorMessage },
+      { status: errorMessage.includes('No autenticado') ? 401 : 500 }
     )
   }
 }

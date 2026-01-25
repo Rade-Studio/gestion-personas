@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { prisma } from '@/lib/db/prisma'
 import { requireAdmin, requireConsultorOrAdmin, generateSystemEmail } from '@/lib/auth/helpers'
+import { hashPassword } from '@/lib/auth/auth'
 import { coordinadorSchema } from '@/features/coordinadores/validations/coordinador'
+import type { DocumentoTipo } from '@prisma/client'
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     // Permitir GET a consultores también
     try {
@@ -12,49 +13,54 @@ export async function GET(request: NextRequest) {
     } catch {
       await requireConsultorOrAdmin()
     }
-    const supabase = await createClient()
 
-    const { data: coordinadores, error } = await supabase
-      .from('profiles')
-      .select(`
-        *,
-        candidato:candidatos(id, nombre_completo)
-      `)
-      .eq('role', 'coordinador')
-      .order('created_at', { ascending: false })
-
-    if (error) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: 500 }
-      )
-    }
+    const coordinadores = await prisma.profile.findMany({
+      where: { role: 'coordinador' },
+      include: {
+        candidato: { select: { id: true, nombreCompleto: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    })
 
     // Obtener conteo de líderes para cada coordinador
-    if (coordinadores && coordinadores.length > 0) {
-      const coordinadoresConLideres = await Promise.all(
-        coordinadores.map(async (coordinador) => {
-          const { count } = await supabase
-            .from('profiles')
-            .select('id', { count: 'exact', head: true })
-            .eq('coordinador_id', coordinador.id)
-            .eq('role', 'lider')
-          
-          return {
-            ...coordinador,
-            lideres_count: count || 0,
-          }
+    const coordinadoresConLideres = await Promise.all(
+      coordinadores.map(async (coordinador) => {
+        const lideresCount = await prisma.profile.count({
+          where: {
+            coordinadorId: coordinador.id,
+            role: 'lider',
+          },
         })
-      )
 
-      return NextResponse.json({ data: coordinadoresConLideres })
-    }
+        return {
+          id: coordinador.id,
+          nombres: coordinador.nombres,
+          apellidos: coordinador.apellidos,
+          tipo_documento: coordinador.tipoDocumento,
+          numero_documento: coordinador.numeroDocumento,
+          fecha_nacimiento: coordinador.fechaNacimiento?.toISOString().split('T')[0],
+          telefono: coordinador.telefono,
+          role: coordinador.role,
+          departamento: coordinador.departamento,
+          municipio: coordinador.municipio,
+          zona: coordinador.zona,
+          candidato_id: coordinador.candidatoId,
+          candidato: coordinador.candidato
+            ? { id: coordinador.candidato.id, nombre_completo: coordinador.candidato.nombreCompleto }
+            : null,
+          created_at: coordinador.createdAt.toISOString(),
+          updated_at: coordinador.updatedAt.toISOString(),
+          lideres_count: lideresCount,
+        }
+      })
+    )
 
-    return NextResponse.json({ data: coordinadores || [] })
-  } catch (error: any) {
+    return NextResponse.json({ data: coordinadoresConLideres })
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Error en el servidor'
     return NextResponse.json(
-      { error: error.message || 'Error en el servidor' },
-      { status: error.message?.includes('No autorizado') ? 403 : 500 }
+      { error: errorMessage },
+      { status: errorMessage.includes('No autorizado') ? 403 : 500 }
     )
   }
 }
@@ -62,18 +68,14 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     await requireAdmin()
-    const supabase = await createClient()
-    const adminClient = createAdminClient()
 
     const body = await request.json()
     const validatedData = coordinadorSchema.parse(body)
 
     // Check if numero_documento already exists
-    const { data: existing } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('numero_documento', validatedData.numero_documento)
-      .single()
+    const existing = await prisma.profile.findUnique({
+      where: { numeroDocumento: validatedData.numero_documento },
+    })
 
     if (existing) {
       return NextResponse.json(
@@ -84,83 +86,73 @@ export async function POST(request: NextRequest) {
 
     // Email y contraseña automáticos basados en número de documento
     const email = generateSystemEmail(validatedData.numero_documento)
-    const password = validatedData.numero_documento
+    const passwordHash = await hashPassword(validatedData.numero_documento)
 
     // Get default candidate if candidato_id not provided
     let candidatoId = validatedData.candidato_id?.trim() || null
     if (!candidatoId) {
-      const { data: defaultCandidato } = await supabase
-        .from('candidatos')
-        .select('id')
-        .eq('es_por_defecto', true)
-        .single()
-      
+      const defaultCandidato = await prisma.candidato.findFirst({
+        where: { esPorDefecto: true },
+        select: { id: true },
+      })
+
       if (defaultCandidato) {
         candidatoId = defaultCandidato.id
       }
     }
 
-    // Create auth user using admin client
-    const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-    })
-
-    if (authError || !authData.user) {
-      return NextResponse.json(
-        { error: 'Error al crear usuario: ' + (authError?.message || 'Error desconocido') },
-        { status: 500 }
-      )
-    }
-
-    // Create profile using admin client to bypass RLS
-    const { data: profile, error: profileError } = await adminClient
-      .from('profiles')
-      .insert({
-        id: authData.user.id,
+    // Create profile with password hash
+    const profile = await prisma.profile.create({
+      data: {
+        email,
+        passwordHash,
         nombres: validatedData.nombres,
         apellidos: validatedData.apellidos,
-        tipo_documento: validatedData.tipo_documento,
-        numero_documento: validatedData.numero_documento,
-        fecha_nacimiento: validatedData.fecha_nacimiento || null,
+        tipoDocumento: validatedData.tipo_documento as DocumentoTipo,
+        numeroDocumento: validatedData.numero_documento,
+        fechaNacimiento: validatedData.fecha_nacimiento
+          ? new Date(validatedData.fecha_nacimiento)
+          : null,
         telefono: validatedData.telefono || null,
         departamento: validatedData.departamento || null,
         municipio: validatedData.municipio || null,
         zona: validatedData.zona || null,
-        candidato_id: candidatoId,
+        candidatoId,
         role: 'coordinador',
-      })
-      .select()
-      .single()
+      },
+    })
 
-    if (profileError) {
-      // Try to delete auth user if profile creation fails
-      await adminClient.auth.admin.deleteUser(authData.user.id)
-      return NextResponse.json(
-        { error: 'Error al crear perfil: ' + profileError.message },
-        { status: 500 }
-      )
+    // Transform to match expected format
+    const response = {
+      id: profile.id,
+      nombres: profile.nombres,
+      apellidos: profile.apellidos,
+      tipo_documento: profile.tipoDocumento,
+      numero_documento: profile.numeroDocumento,
+      fecha_nacimiento: profile.fechaNacimiento?.toISOString().split('T')[0],
+      telefono: profile.telefono,
+      role: profile.role,
+      departamento: profile.departamento,
+      municipio: profile.municipio,
+      zona: profile.zona,
+      candidato_id: profile.candidatoId,
+      created_at: profile.createdAt.toISOString(),
+      updated_at: profile.updatedAt.toISOString(),
     }
 
-    return NextResponse.json(
-      {
-        data: profile,
-      },
-      { status: 201 }
-    )
-  } catch (error: any) {
-    if (error.name === 'ZodError') {
+    return NextResponse.json({ data: response }, { status: 201 })
+  } catch (error: unknown) {
+    if (error && typeof error === 'object' && 'name' in error && error.name === 'ZodError') {
       return NextResponse.json(
-        { error: 'Datos inválidos', details: error.errors },
+        { error: 'Datos inválidos', details: (error as { errors: unknown }).errors },
         { status: 400 }
       )
     }
 
+    const errorMessage = error instanceof Error ? error.message : 'Error en el servidor'
     return NextResponse.json(
-      { error: error.message || 'Error en el servidor' },
-      { status: error.message?.includes('No autorizado') ? 403 : 500 }
+      { error: errorMessage },
+      { status: errorMessage.includes('No autorizado') ? 403 : 500 }
     )
   }
 }
-

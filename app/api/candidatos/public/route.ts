@@ -1,38 +1,31 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { prisma } from '@/lib/db/prisma'
 
 export async function GET() {
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    const data = await prisma.candidato.findMany({
+      select: {
+        id: true,
+        nombreCompleto: true,
+        numeroTarjeton: true,
+        imagenUrl: true,
+        partidoGrupo: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    })
 
-    if (!supabaseUrl || !supabaseAnonKey) {
-      return NextResponse.json(
-        { error: 'Configuración de Supabase no encontrada' },
-        { status: 500 }
-      )
-    }
+    // Transform to match expected format
+    const transformedData = data.map((c) => ({
+      id: c.id,
+      nombre_completo: c.nombreCompleto,
+      numero_tarjeton: c.numeroTarjeton,
+      imagen_url: c.imagenUrl,
+      partido_grupo: c.partidoGrupo,
+    }))
 
-    const supabase = createClient(supabaseUrl, supabaseAnonKey)
-
-    const { data, error } = await supabase
-      .from('candidatos')
-      .select('id, nombre_completo, numero_tarjeton, imagen_url, partido_grupo')
-      .order('created_at', { ascending: false })
-
-    if (error) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: 500 }
-      )
-    }
-
-    return NextResponse.json({ data: data || [] })
-  } catch (error: any) {
-    return NextResponse.json(
-      { error: error.message || 'Error en el servidor' },
-      { status: 500 }
-    )
+    return NextResponse.json({ data: transformedData })
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Error en el servidor'
+    return NextResponse.json({ error: errorMessage }, { status: 500 })
   }
 }
-

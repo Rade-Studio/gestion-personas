@@ -1,30 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { prisma } from '@/lib/db/prisma'
 import { requireAdmin } from '@/lib/auth/helpers'
 import { candidatoSchema } from '@/features/candidatos/validations/candidato'
+import { uploadFile, deleteFile, isValidImage, isValidFileSize } from '@/lib/storage/client'
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     await requireAdmin()
-    const supabase = await createClient()
 
-    const { data, error } = await supabase
-      .from('candidatos')
-      .select('*')
-      .order('created_at', { ascending: false })
+    const data = await prisma.candidato.findMany({
+      orderBy: { createdAt: 'desc' },
+    })
 
-    if (error) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: 500 }
-      )
-    }
+    // Transform to match expected format
+    const transformedData = data.map((c) => ({
+      id: c.id,
+      nombre_completo: c.nombreCompleto,
+      numero_tarjeton: c.numeroTarjeton,
+      imagen_url: c.imagenUrl,
+      imagen_path: c.imagenPath,
+      partido_grupo: c.partidoGrupo,
+      es_por_defecto: c.esPorDefecto,
+      created_at: c.createdAt.toISOString(),
+      updated_at: c.updatedAt.toISOString(),
+    }))
 
-    return NextResponse.json({ data: data || [] })
-  } catch (error: any) {
+    return NextResponse.json({ data: transformedData })
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Error en el servidor'
     return NextResponse.json(
-      { error: error.message || 'Error en el servidor' },
-      { status: error.message?.includes('No autorizado') ? 403 : 500 }
+      { error: errorMessage },
+      { status: errorMessage.includes('No autorizado') ? 403 : 500 }
     )
   }
 }
@@ -32,7 +38,6 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     await requireAdmin()
-    const supabase = await createClient()
 
     const formData = await request.formData()
     const imagen = formData.get('imagen') as File | null
@@ -50,11 +55,9 @@ export async function POST(request: NextRequest) {
     })
 
     // Check if numero_tarjeton already exists
-    const { data: existing } = await supabase
-      .from('candidatos')
-      .select('id')
-      .eq('numero_tarjeton', validatedData.numero_tarjeton)
-      .single()
+    const existing = await prisma.candidato.findUnique({
+      where: { numeroTarjeton: validatedData.numero_tarjeton },
+    })
 
     if (existing) {
       return NextResponse.json(
@@ -65,17 +68,10 @@ export async function POST(request: NextRequest) {
 
     // If marking as default, unmark other candidates
     if (validatedData.es_por_defecto) {
-      const { error: unmarkError } = await supabase
-        .from('candidatos')
-        .update({ es_por_defecto: false })
-        .eq('es_por_defecto', true)
-
-      if (unmarkError) {
-        return NextResponse.json(
-          { error: 'Error al actualizar candidatos por defecto: ' + unmarkError.message },
-          { status: 500 }
-        )
-      }
+      await prisma.candidato.updateMany({
+        where: { esPorDefecto: true },
+        data: { esPorDefecto: false },
+      })
     }
 
     let imagenUrl: string | null = null
@@ -84,85 +80,92 @@ export async function POST(request: NextRequest) {
     // Upload image if provided
     if (imagen) {
       // Validate file type
-      if (!imagen.type.startsWith('image/')) {
-        return NextResponse.json(
-          { error: 'El archivo debe ser una imagen' },
-          { status: 400 }
-        )
+      if (!isValidImage(imagen)) {
+        return NextResponse.json({ error: 'El archivo debe ser una imagen' }, { status: 400 })
       }
 
       // Validate file size (5MB)
-      if (imagen.size > 5 * 1024 * 1024) {
-        return NextResponse.json(
-          { error: 'La imagen no debe exceder 5MB' },
-          { status: 400 }
-        )
+      if (!isValidFileSize(imagen, 5 * 1024 * 1024)) {
+        return NextResponse.json({ error: 'La imagen no debe exceder 5MB' }, { status: 400 })
       }
 
       const fileExt = imagen.name.split('.').pop()
       const fileName = `${Date.now()}-${validatedData.numero_tarjeton}.${fileExt}`
       const filePath = `candidatos/${fileName}`
 
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('candidatos-imagenes')
-        .upload(filePath, imagen, {
-          cacheControl: '3600',
-          upsert: false,
-        })
-
-      if (uploadError) {
+      try {
+        const result = await uploadFile(imagen, filePath, imagen.type)
+        imagenUrl = result.url
+        imagenPath = result.path
+      } catch (uploadError) {
         return NextResponse.json(
-          { error: 'Error al subir la imagen: ' + uploadError.message },
+          {
+            error:
+              'Error al subir la imagen: ' +
+              (uploadError instanceof Error ? uploadError.message : 'Error desconocido'),
+          },
           { status: 500 }
         )
       }
-
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from('candidatos-imagenes').getPublicUrl(filePath)
-
-      imagenUrl = publicUrl
-      imagenPath = filePath
     }
 
     // Create candidato
-    const { data: candidato, error: candidatoError } = await supabase
-      .from('candidatos')
-      .insert({
-        nombre_completo: validatedData.nombre_completo,
-        numero_tarjeton: validatedData.numero_tarjeton,
-        partido_grupo: validatedData.partido_grupo || null,
-        es_por_defecto: validatedData.es_por_defecto,
-        imagen_url: imagenUrl,
-        imagen_path: imagenPath,
+    try {
+      const candidato = await prisma.candidato.create({
+        data: {
+          nombreCompleto: validatedData.nombre_completo,
+          numeroTarjeton: validatedData.numero_tarjeton,
+          partidoGrupo: validatedData.partido_grupo || null,
+          esPorDefecto: validatedData.es_por_defecto,
+          imagenUrl,
+          imagenPath,
+        },
       })
-      .select()
-      .single()
 
-    if (candidatoError) {
+      // Transform to match expected format
+      const response = {
+        id: candidato.id,
+        nombre_completo: candidato.nombreCompleto,
+        numero_tarjeton: candidato.numeroTarjeton,
+        imagen_url: candidato.imagenUrl,
+        imagen_path: candidato.imagenPath,
+        partido_grupo: candidato.partidoGrupo,
+        es_por_defecto: candidato.esPorDefecto,
+        created_at: candidato.createdAt.toISOString(),
+        updated_at: candidato.updatedAt.toISOString(),
+      }
+
+      return NextResponse.json({ data: response }, { status: 201 })
+    } catch (dbError) {
       // Delete uploaded file if record creation fails
       if (imagenPath) {
-        await supabase.storage.from('candidatos-imagenes').remove([imagenPath])
+        try {
+          await deleteFile(imagenPath)
+        } catch {
+          // Ignore delete error
+        }
       }
       return NextResponse.json(
-        { error: 'Error al crear candidato: ' + candidatoError.message },
+        {
+          error:
+            'Error al crear candidato: ' +
+            (dbError instanceof Error ? dbError.message : 'Error desconocido'),
+        },
         { status: 500 }
       )
     }
-
-    return NextResponse.json({ data: candidato }, { status: 201 })
-  } catch (error: any) {
-    if (error.name === 'ZodError') {
+  } catch (error: unknown) {
+    if (error && typeof error === 'object' && 'name' in error && error.name === 'ZodError') {
       return NextResponse.json(
-        { error: 'Datos inválidos', details: error.errors },
+        { error: 'Datos inválidos', details: (error as { errors: unknown }).errors },
         { status: 400 }
       )
     }
 
+    const errorMessage = error instanceof Error ? error.message : 'Error en el servidor'
     return NextResponse.json(
-      { error: error.message || 'Error en el servidor' },
-      { status: error.message?.includes('No autorizado') ? 403 : 500 }
+      { error: errorMessage },
+      { status: errorMessage.includes('No autorizado') ? 403 : 500 }
     )
   }
 }
-

@@ -1,47 +1,50 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { prisma } from '@/lib/db/prisma'
 import { requireAuth } from '@/lib/auth/helpers'
+import type { DocumentoTipo } from '@prisma/client'
 
 export async function POST(request: NextRequest) {
   try {
     const user = await requireAuth()
-    const supabase = await createClient()
 
     const body = await request.json()
-    const { role, nombres, apellidos, tipo_documento, numero_documento, fecha_nacimiento, telefono } = body
+    const { nombres, apellidos, tipo_documento, numero_documento, fecha_nacimiento, telefono } =
+      body
 
     // Verificar si el perfil ya existe
-    const { data: existingProfile } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single()
+    const existingProfile = await prisma.profile.findUnique({
+      where: { id: user.id },
+    })
 
     if (existingProfile) {
       // Actualizar perfil existente - NO permitir cambiar el rol
-      const { data: updatedProfile, error: updateError } = await supabase
-        .from('profiles')
-        .update({
-          // No actualizar el rol, mantener el existente
+      const updatedProfile = await prisma.profile.update({
+        where: { id: user.id },
+        data: {
           nombres: nombres || existingProfile.nombres,
           apellidos: apellidos || existingProfile.apellidos,
-          tipo_documento: tipo_documento || existingProfile.tipo_documento,
-          numero_documento: numero_documento || existingProfile.numero_documento,
-          fecha_nacimiento: fecha_nacimiento || existingProfile.fecha_nacimiento,
+          tipoDocumento: (tipo_documento as DocumentoTipo) || existingProfile.tipoDocumento,
+          numeroDocumento: numero_documento || existingProfile.numeroDocumento,
+          fechaNacimiento: fecha_nacimiento ? new Date(fecha_nacimiento) : existingProfile.fechaNacimiento,
           telefono: telefono || existingProfile.telefono,
-        })
-        .eq('id', user.id)
-        .select()
-        .single()
+        },
+      })
 
-      if (updateError) {
-        return NextResponse.json(
-          { error: 'Error al actualizar perfil: ' + updateError.message },
-          { status: 500 }
-        )
+      // Transform to match expected format
+      const response = {
+        id: updatedProfile.id,
+        nombres: updatedProfile.nombres,
+        apellidos: updatedProfile.apellidos,
+        tipo_documento: updatedProfile.tipoDocumento,
+        numero_documento: updatedProfile.numeroDocumento,
+        fecha_nacimiento: updatedProfile.fechaNacimiento?.toISOString().split('T')[0],
+        telefono: updatedProfile.telefono,
+        role: updatedProfile.role,
+        created_at: updatedProfile.createdAt.toISOString(),
+        updated_at: updatedProfile.updatedAt.toISOString(),
       }
 
-      return NextResponse.json({ data: updatedProfile, message: 'Perfil actualizado' })
+      return NextResponse.json({ data: response, message: 'Perfil actualizado' })
     } else {
       // Crear nuevo perfil
       if (!nombres || !apellidos || !tipo_documento || !numero_documento) {
@@ -51,37 +54,40 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      // Solo permitir establecer rol al crear perfil, pero por defecto es 'lider'
-      // El rol solo puede ser establecido por un admin al crear líderes
-      const { data: newProfile, error: createError } = await supabase
-        .from('profiles')
-        .insert({
+      const newProfile = await prisma.profile.create({
+        data: {
           id: user.id,
           nombres,
           apellidos,
-          tipo_documento,
-          numero_documento,
-          fecha_nacimiento: fecha_nacimiento || null,
+          tipoDocumento: tipo_documento as DocumentoTipo,
+          numeroDocumento: numero_documento,
+          fechaNacimiento: fecha_nacimiento ? new Date(fecha_nacimiento) : null,
           telefono: telefono || null,
-          role: 'lider', // Siempre 'lider' por defecto, solo admins pueden crear otros admins
-        })
-        .select()
-        .single()
+          role: 'lider', // Siempre 'lider' por defecto
+        },
+      })
 
-      if (createError) {
-        return NextResponse.json(
-          { error: 'Error al crear perfil: ' + createError.message },
-          { status: 500 }
-        )
+      // Transform to match expected format
+      const response = {
+        id: newProfile.id,
+        nombres: newProfile.nombres,
+        apellidos: newProfile.apellidos,
+        tipo_documento: newProfile.tipoDocumento,
+        numero_documento: newProfile.numeroDocumento,
+        fecha_nacimiento: newProfile.fechaNacimiento?.toISOString().split('T')[0],
+        telefono: newProfile.telefono,
+        role: newProfile.role,
+        created_at: newProfile.createdAt.toISOString(),
+        updated_at: newProfile.updatedAt.toISOString(),
       }
 
-      return NextResponse.json({ data: newProfile, message: 'Perfil creado' }, { status: 201 })
+      return NextResponse.json({ data: response, message: 'Perfil creado' }, { status: 201 })
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Error en el servidor'
     return NextResponse.json(
-      { error: error.message || 'Error en el servidor' },
-      { status: error.message?.includes('No autenticado') ? 401 : 500 }
+      { error: errorMessage },
+      { status: errorMessage.includes('No autenticado') ? 401 : 500 }
     )
   }
 }
-

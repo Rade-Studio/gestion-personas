@@ -27,7 +27,13 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Loader2, Search, ChevronDown } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
-import type { Persona, Barrio, PuestoVotacion } from '@/lib/types'
+import type { Persona, Barrio, PuestoVotacion, Profile } from '@/lib/types'
+
+interface Lider {
+  id: string
+  nombres: string
+  apellidos: string
+}
 
 interface PersonaFormProps {
   open: boolean
@@ -35,6 +41,7 @@ interface PersonaFormProps {
   onSubmit: (data: PersonaFormData) => Promise<void>
   initialData?: Persona
   loading?: boolean
+  profile?: Profile | null
 }
 
 export function PersonaForm({
@@ -43,6 +50,7 @@ export function PersonaForm({
   onSubmit,
   initialData,
   loading = false,
+  profile,
 }: PersonaFormProps) {
   const [barrios, setBarrios] = useState<Barrio[]>([])
   const [puestosVotacion, setPuestosVotacion] = useState<PuestoVotacion[]>([])
@@ -53,6 +61,10 @@ export function PersonaForm({
   const [barrioPopoverOpen, setBarrioPopoverOpen] = useState(false)
   const [puestoSearch, setPuestoSearch] = useState('')
   const [puestoPopoverOpen, setPuestoPopoverOpen] = useState(false)
+  const [lideres, setLideres] = useState<Lider[]>([])
+  const [loadingLideres, setLoadingLideres] = useState(false)
+
+  const isCoordinador = profile?.role === 'coordinador'
 
   // Configuración de valores por defecto
   const useDefaultLocation = process.env.NEXT_PUBLIC_USE_DEFAULT_LOCATION === 'true'
@@ -78,10 +90,11 @@ export function PersonaForm({
       puesto_votacion_id: undefined,
       puesto_votacion: '',
       mesa_votacion: '',
+      registrado_por: undefined,
     },
   })
 
-  // Cargar barrios y puestos de votación cuando se abre el diálogo
+  // Cargar barrios, puestos de votación y líderes cuando se abre el diálogo
   useEffect(() => {
     if (open) {
       setIsDataLoaded(false)
@@ -115,13 +128,34 @@ export function PersonaForm({
         }
       }
 
-      Promise.all([fetchBarrios(), fetchPuestos()]).then(() => {
+      const fetchLideres = async () => {
+        if (!isCoordinador || !profile?.id) return
+        setLoadingLideres(true)
+        try {
+          const response = await fetch(`/api/coordinadores/${profile.id}/lideres`)
+          const data = await response.json()
+          if (response.ok) {
+            setLideres(data.data || [])
+          }
+        } catch (error) {
+          // Silently fail
+        } finally {
+          setLoadingLideres(false)
+        }
+      }
+
+      const promises = [fetchBarrios(), fetchPuestos()]
+      if (isCoordinador) {
+        promises.push(fetchLideres())
+      }
+
+      Promise.all(promises).then(() => {
         setIsDataLoaded(true)
       })
     } else {
       setIsDataLoaded(false)
     }
-  }, [open])
+  }, [open, isCoordinador, profile?.id])
 
   // Update form values when initialData changes
   useEffect(() => {
@@ -147,6 +181,7 @@ export function PersonaForm({
         puesto_votacion_id: puestoVotacionId,
         puesto_votacion: typeof initialData.puesto_votacion === 'string' ? initialData.puesto_votacion : (initialData.puesto_votacion as any)?.nombre || '',
         mesa_votacion: initialData.mesa_votacion || '',
+        registrado_por: undefined,
       })
     } else {
       form.reset({
@@ -166,6 +201,7 @@ export function PersonaForm({
         puesto_votacion_id: undefined,
         puesto_votacion: '',
         mesa_votacion: '',
+        registrado_por: undefined,
       })
     }
   }, [initialData, form])
@@ -197,7 +233,7 @@ export function PersonaForm({
     onOpenChange(isOpen)
   }
 
-  const isLoading = loadingBarrios || loadingPuestos || !isDataLoaded
+  const isLoading = loadingBarrios || loadingPuestos || (isCoordinador && loadingLideres) || !isDataLoaded
 
   return (
     <Dialog open={open} onOpenChange={handleDialogChange}>
@@ -562,6 +598,41 @@ export function PersonaForm({
                 )}
               />
             </div>
+
+            {isCoordinador && lideres.length > 0 && (
+              <FormField
+                control={form.control}
+                name="registrado_por"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Asignar a Líder</FormLabel>
+                    <Select
+                      value={field.value || 'none'}
+                      onValueChange={(value) => field.onChange(value === 'none' ? null : value)}
+                      disabled={loading || loadingLideres}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder={loadingLideres ? 'Cargando...' : 'Seleccionar líder (opcional)'} />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="none">Sin asignar (registrar a mi nombre)</SelectItem>
+                        {lideres.map((lider) => (
+                          <SelectItem key={lider.id} value={lider.id}>
+                            {lider.nombres} {lider.apellidos}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Si no selecciona un líder, la persona se registrará a su nombre
+                    </p>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             <DialogFooter>
               <Button

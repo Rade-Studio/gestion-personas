@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/db/prisma'
 import { requireCoordinadorOrAdmin, requireConsultorOrAdmin } from '@/lib/auth/helpers'
 import ExcelJS from 'exceljs'
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     let profile
     try {
@@ -11,30 +11,22 @@ export async function GET(request: NextRequest) {
     } catch {
       profile = await requireConsultorOrAdmin()
     }
-    const supabase = await createClient()
 
-    let query = supabase
-      .from('profiles')
-      .select(`
-        *,
-        candidato:candidatos(id, nombre_completo),
-        puesto_votacion:puestos_votacion(id, nombre, codigo),
-        barrio:barrios(id, codigo, nombre)
-      `)
-      .eq('role', 'lider')
+    const where: Record<string, unknown> = { role: 'lider' }
 
     if (profile.role === 'coordinador') {
-      query = query.eq('coordinador_id', profile.id)
+      where.coordinadorId = profile.id
     }
 
-    const { data, error } = await query.order('created_at', { ascending: false })
-
-    if (error) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: 500 }
-      )
-    }
+    const data = await prisma.profile.findMany({
+      where,
+      include: {
+        candidato: { select: { id: true, nombreCompleto: true } },
+        puestoVotacion: { select: { id: true, nombre: true, codigo: true } },
+        barrio: { select: { id: true, codigo: true, nombre: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    })
 
     const workbook = new ExcelJS.Workbook()
     const worksheet = workbook.addWorksheet('Líderes')
@@ -58,16 +50,16 @@ export async function GET(request: NextRequest) {
     }
     worksheet.getRow(1).height = 25
 
-    ;(data || []).forEach((lider: any) => {
+    data.forEach((lider) => {
       worksheet.addRow({
         nombres: lider.nombres || '',
         apellidos: lider.apellidos || '',
-        cedula: lider.numero_documento || '',
+        cedula: lider.numeroDocumento || '',
         celular: lider.telefono || '',
         direccion: lider.direccion || '',
         barrio_nombre: lider.barrio?.nombre || '',
-        puesto_nombre: lider.puesto_votacion?.nombre || '',
-        mesa: lider.mesa_votacion || '',
+        puesto_nombre: lider.puestoVotacion?.nombre || '',
+        mesa: lider.mesaVotacion || '',
       })
     })
 
@@ -85,16 +77,21 @@ export async function GET(request: NextRequest) {
 
     return new NextResponse(buffer, {
       headers: {
-        'Content-Type':
-          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         'Content-Disposition': `attachment; filename="${filename}"`,
       },
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Error al exportar datos'
     return NextResponse.json(
-      { error: error.message || 'Error al exportar datos' },
-      { status: error.message?.includes('No autorizado') ? 403 : error.message?.includes('No autenticado') ? 401 : 500 }
+      { error: errorMessage },
+      {
+        status: errorMessage.includes('No autorizado')
+          ? 403
+          : errorMessage.includes('No autenticado')
+            ? 401
+            : 500,
+      }
     )
   }
 }
-

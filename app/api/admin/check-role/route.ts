@@ -6,10 +6,7 @@ export async function GET() {
     const profile = await getCurrentProfile()
 
     if (!profile) {
-      return NextResponse.json(
-        { error: 'No se encontró perfil de usuario' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: 'No se encontró perfil de usuario' }, { status: 404 })
     }
 
     return NextResponse.json({
@@ -17,13 +14,11 @@ export async function GET() {
       isAdmin: profile.role === 'admin',
       isCoordinador: profile.role === 'coordinador',
       isLider: profile.role === 'lider',
+      isConsultor: profile.role === 'consultor',
       profile,
     })
-  } catch (error: any) {
-    return NextResponse.json(
-      { error: error.message || 'Error en el servidor' },
-      { status: 500 }
-    )
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Error en el servidor'
+    return NextResponse.json({ error: errorMessage }, { status: 500 })
   }
 }
-

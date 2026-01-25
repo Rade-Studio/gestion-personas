@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
-import { requireCoordinadorOrAdmin, requireConsultorOrAdmin, getCurrentProfile } from '@/lib/auth/helpers'
+import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/db/prisma'
+import { requireCoordinadorOrAdmin, requireConsultorOrAdmin } from '@/lib/auth/helpers'
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     // Permitir acceso a coordinadores, admins y consultores
     let profile
@@ -11,57 +11,40 @@ export async function GET(request: NextRequest) {
     } catch {
       profile = await requireConsultorOrAdmin()
     }
-    const supabase = await createClient()
 
     // Obtener líderes según el rol
-    let lideresQuery = supabase
-      .from('profiles')
-      .select('id, nombres, apellidos')
-      .eq('role', 'lider')
+    const lideresWhere: Record<string, unknown> = { role: 'lider' }
 
     // Coordinadores solo ven sus líderes
     if (profile.role === 'coordinador') {
-      lideresQuery = lideresQuery.eq('coordinador_id', profile.id)
+      lideresWhere.coordinadorId = profile.id
     }
 
-    const { data: lideres, error: lideresError } = await lideresQuery
+    const lideres = await prisma.profile.findMany({
+      where: lideresWhere,
+      select: { id: true, nombres: true, apellidos: true },
+    })
 
-    if (lideresError) {
-      throw new Error('Error al obtener líderes: ' + lideresError.message)
-    }
-
-    if (!lideres || lideres.length === 0) {
+    if (lideres.length === 0) {
       return NextResponse.json([])
     }
 
     // Obtener todas las personas
-    const { data: personas, error: personasError } = await supabase
-      .from('personas')
-      .select('id, registrado_por')
-
-    if (personasError) {
-      throw new Error('Error al obtener personas: ' + personasError.message)
-    }
+    const personas = await prisma.persona.findMany({
+      select: { id: true, registradoPorId: true },
+    })
 
     // Obtener IDs de personas confirmadas (no reversadas)
-    const { data: confirmaciones, error: confirmacionesError } = await supabase
-      .from('voto_confirmaciones')
-      .select('persona_id')
-      .eq('reversado', false)
+    const confirmaciones = await prisma.votoConfirmacion.findMany({
+      where: { reversado: false },
+      select: { personaId: true },
+    })
 
-    if (confirmacionesError) {
-      throw new Error('Error al obtener confirmaciones: ' + confirmacionesError.message)
-    }
-
-    const personasConfirmadasIds = new Set(
-      confirmaciones?.map((c) => c.persona_id) || []
-    )
+    const personasConfirmadasIds = new Set(confirmaciones.map((c) => c.personaId))
 
     // Calcular estadísticas por líder
     const stats = lideres.map((lider) => {
-      const personasDelLider = personas?.filter(
-        (p) => p.registrado_por === lider.id
-      ) || []
+      const personasDelLider = personas.filter((p) => p.registradoPorId === lider.id)
 
       const confirmadas = personasDelLider.filter((p) =>
         personasConfirmadasIds.has(p.id)
@@ -77,11 +60,11 @@ export async function GET(request: NextRequest) {
     })
 
     return NextResponse.json(stats)
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Error en el servidor'
     return NextResponse.json(
-      { error: error.message || 'Error en el servidor' },
-      { status: error.message?.includes('No autorizado') ? 403 : 500 }
+      { error: errorMessage },
+      { status: errorMessage.includes('No autorizado') ? 403 : 500 }
     )
   }
 }
-

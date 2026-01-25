@@ -78,6 +78,7 @@ export const personaSchema = z.object({
   puesto_votacion_id: z.number().int().positive().optional().or(z.null()),
   puesto_votacion: z.string().optional().or(z.literal('')), // Mantener para compatibilidad
   mesa_votacion: z.string().optional().or(z.literal('')),
+  registrado_por: z.string().uuid().optional().or(z.null()), // ID del líder asignado (para coordinadores)
 })
 
 export type PersonaFormData = z.infer<typeof personaSchema>

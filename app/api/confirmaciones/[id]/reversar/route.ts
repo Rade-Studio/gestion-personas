@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
-import { requireLiderOrAdmin, getCurrentProfile } from '@/lib/auth/helpers'
+import { prisma } from '@/lib/db/prisma'
+import { requireLiderOrAdmin } from '@/lib/auth/helpers'
 
 export async function POST(
   request: NextRequest,
@@ -8,7 +8,7 @@ export async function POST(
 ) {
   try {
     const profile = await requireLiderOrAdmin()
-    
+
     // Bloquear consultores de reversar confirmaciones
     if (profile.role === 'consultor') {
       return NextResponse.json(
@@ -16,27 +16,25 @@ export async function POST(
         { status: 403 }
       )
     }
-    
+
     const { id } = await params
-    const supabase = await createClient()
 
-    // Get confirmacion
-    const { data: confirmacion, error: confirmacionError } = await supabase
-      .from('voto_confirmaciones')
-      .select('*, personas(registrado_por)')
-      .eq('id', id)
-      .single()
+    // Get confirmacion with persona
+    const confirmacion = await prisma.votoConfirmacion.findUnique({
+      where: { id },
+      include: {
+        persona: {
+          select: { registradoPorId: true },
+        },
+      },
+    })
 
-    if (confirmacionError || !confirmacion) {
-      return NextResponse.json(
-        { error: 'Confirmación no encontrada' },
-        { status: 404 }
-      )
+    if (!confirmacion) {
+      return NextResponse.json({ error: 'Confirmación no encontrada' }, { status: 404 })
     }
 
     // Check permissions
-    const persona = confirmacion.personas as any
-    if (profile.role === 'lider' && persona.registrado_por !== profile.id) {
+    if (profile.role === 'lider' && confirmacion.persona.registradoPorId !== profile.id) {
       return NextResponse.json(
         { error: 'Sin permisos para reversar esta confirmación' },
         { status: 403 }
@@ -51,30 +49,36 @@ export async function POST(
     }
 
     // Update confirmacion
-    const { data: updatedConfirmacion, error: updateError } = await supabase
-      .from('voto_confirmaciones')
-      .update({
+    const updatedConfirmacion = await prisma.votoConfirmacion.update({
+      where: { id },
+      data: {
         reversado: true,
-        reversado_por: profile.id,
-        reversado_at: new Date().toISOString(),
-      })
-      .eq('id', id)
-      .select()
-      .single()
+        reversadoPorId: profile.id,
+        reversadoAt: new Date(),
+      },
+    })
 
-    if (updateError) {
-      return NextResponse.json(
-        { error: 'Error al reversar confirmación: ' + updateError.message },
-        { status: 500 }
-      )
+    // Transform to match expected format
+    const response = {
+      id: updatedConfirmacion.id,
+      persona_id: updatedConfirmacion.personaId,
+      imagen_url: updatedConfirmacion.imagenUrl,
+      imagen_path: updatedConfirmacion.imagenPath,
+      confirmado_por: updatedConfirmacion.confirmadoPorId,
+      confirmado_at: updatedConfirmacion.confirmadoAt.toISOString(),
+      reversado: updatedConfirmacion.reversado,
+      reversado_por: updatedConfirmacion.reversadoPorId,
+      reversado_at: updatedConfirmacion.reversadoAt?.toISOString(),
+      created_at: updatedConfirmacion.createdAt.toISOString(),
+      updated_at: updatedConfirmacion.updatedAt.toISOString(),
     }
 
-    return NextResponse.json({ data: updatedConfirmacion })
-  } catch (error: any) {
+    return NextResponse.json({ data: response })
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Error en el servidor'
     return NextResponse.json(
-      { error: error.message || 'Error en el servidor' },
-      { status: error.message?.includes('No autenticado') ? 401 : 500 }
+      { error: errorMessage },
+      { status: errorMessage.includes('No autenticado') ? 401 : 500 }
     )
   }
 }
-
