@@ -6,6 +6,7 @@ import { PersonaForm } from '@/features/personas/components/persona-form'
 import { PersonasTable } from '@/features/personas/components/personas-table'
 import { PersonasFilters } from '@/features/personas/components/personas-filters'
 import { ConfirmarActividadDialog } from '@/features/personas/components/confirmar-actividad-dialog'
+import { NovedadModal } from '@/features/novedades/components/novedad-modal'
 import { Button } from '@/components/ui/button'
 import { Plus, Download, Upload, CheckCircle2, XCircle, Users, AlertCircle, Info } from 'lucide-react'
 import { toast } from 'sonner'
@@ -88,6 +89,8 @@ export default function PersonasPage() {
     registros_fallidos: number
     errores?: Array<{ row?: number; error: string; tipo?: string; numero_documento?: string }>
   } | null>(null)
+  const [novedadModalOpen, setNovedadModalOpen] = useState(false)
+  const [novedadPersona, setNovedadPersona] = useState<PersonaWithConfirmacion | null>(null)
 
   // Serializar filters para comparación estable
   const filtersString = useMemo(() => JSON.stringify(filters), [filters])
@@ -770,6 +773,11 @@ export default function PersonasPage() {
             setConfirmActividadOpen(true)
           }}
           onReversarVoto={handleReversarVotoClick}
+          onNovedad={(persona) => {
+            setNovedadPersona(persona)
+            setNovedadModalOpen(true)
+          }}
+          onRefresh={() => fetchPersonas()}
           loading={loading}
         />
 
@@ -1125,6 +1133,20 @@ export default function PersonasPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Novedad Modal */}
+      <NovedadModal
+        open={novedadModalOpen}
+        onOpenChange={(open) => {
+          setNovedadModalOpen(open)
+          if (!open) {
+            setNovedadPersona(null)
+          }
+        }}
+        persona={novedadPersona}
+        onNovedadCreated={() => fetchPersonas()}
+        canCreateNovedad={!isConsultor}
+      />
     </MainLayout>
   )
 }

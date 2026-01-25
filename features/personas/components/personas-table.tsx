@@ -11,11 +11,27 @@ import {
 } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { MoreHorizontal, Edit, Trash2, CheckCircle2, XCircle, Eye, Users } from 'lucide-react'
+import { 
+  MoreHorizontal, 
+  Edit, 
+  Trash2, 
+  CheckCircle2, 
+  XCircle, 
+  Eye, 
+  Users, 
+  AlertTriangle, 
+  Shield, 
+  ShieldCheck, 
+  FileCheck, 
+  Undo2,
+  Clock,
+  FileWarning
+} from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
@@ -25,11 +41,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import type { PersonaWithConfirmacion, PuestoVotacion } from '@/lib/types'
-import { getPersonaEstado } from '@/features/personas/utils/persona-estado'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+import type { PersonaWithConfirmacion, PuestoVotacion, PersonaEstado } from '@/lib/types'
 import Image from 'next/image'
-import { AlertCircle } from 'lucide-react'
 import { useAuth } from '@/features/auth/hooks/use-auth'
+import { toast } from 'sonner'
 
 interface PersonasTableProps {
   personas: PersonaWithConfirmacion[]
@@ -37,6 +58,8 @@ interface PersonasTableProps {
   onDelete: (id: string) => void
   onConfirmVoto: (persona: PersonaWithConfirmacion) => void
   onReversarVoto: (persona: PersonaWithConfirmacion) => void
+  onNovedad?: (persona: PersonaWithConfirmacion) => void
+  onRefresh?: () => void
   loading?: boolean
 }
 
@@ -46,55 +69,161 @@ const getPuestoVotacionNombre = (puesto: string | PuestoVotacion | undefined): s
   return puesto.nombre || '-'
 }
 
+const ESTADO_CONFIG: Record<PersonaEstado, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning'; icon: typeof Clock }> = {
+  DATOS_PENDIENTES: { label: 'Datos Pendientes', variant: 'secondary', icon: Clock },
+  CON_NOVEDAD: { label: 'Con Novedad', variant: 'warning', icon: AlertTriangle },
+  VERIFICADO: { label: 'Verificado', variant: 'outline', icon: Shield },
+  CONFIRMADO: { label: 'Confirmado', variant: 'default', icon: ShieldCheck },
+  COMPLETADO: { label: 'Completado', variant: 'success', icon: CheckCircle2 },
+}
+
 export function PersonasTable({
   personas,
   onEdit,
   onDelete,
   onConfirmVoto,
   onReversarVoto,
+  onNovedad,
+  onRefresh,
   loading = false,
 }: PersonasTableProps) {
-  const { isConsultor } = useAuth()
+  const { profile, isConsultor } = useAuth()
   const [viewingImage, setViewingImage] = useState<string | null>(null)
+  const [actionLoading, setActionLoading] = useState<string | null>(null)
 
   const isConfirmed = (persona: PersonaWithConfirmacion) => {
     return persona.confirmacion && !persona.confirmacion.reversado
   }
 
   const getEstadoBadge = (persona: PersonaWithConfirmacion) => {
-    const estado = getPersonaEstado(persona)
-    
-    if (estado === 'confirmed') {
-      return (
-        <Badge 
-          variant="success" 
-          className="gap-1.5 px-2.5 py-1"
-        >
-          <CheckCircle2 className="h-3.5 w-3.5" />
-          Confirmado
-        </Badge>
-      )
-    } else if (estado === 'missing_data') {
-      return (
-        <Badge 
-          variant="destructive" 
-          className="gap-1.5 px-2.5 py-1"
-        >
-          <AlertCircle className="h-3.5 w-3.5" />
-          Datos Faltantes
-        </Badge>
-      )
-    } else {
-      return (
-        <Badge 
-          variant="warning" 
-          className="gap-1.5 px-2.5 py-1"
-        >
-          <XCircle className="h-3.5 w-3.5" />
-          Pendiente
-        </Badge>
-      )
+    const estado = persona.estado || 'DATOS_PENDIENTES'
+    const config = ESTADO_CONFIG[estado]
+    const IconComponent = config.icon
+
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Badge variant={config.variant} className="gap-1.5 px-2.5 py-1 cursor-help">
+              <IconComponent className="h-3.5 w-3.5" />
+              {config.label}
+            </Badge>
+          </TooltipTrigger>
+          <TooltipContent>
+            {estado === 'CON_NOVEDAD' && persona.novedad_activa && (
+              <p className="max-w-xs">{persona.novedad_activa.observacion}</p>
+            )}
+            {estado === 'VERIFICADO' && persona.validado_por_profile && (
+              <p>
+                Verificado por {persona.validado_por_profile.nombres} {persona.validado_por_profile.apellidos}
+                {persona.validado_at && ` el ${new Date(persona.validado_at).toLocaleDateString('es-CO')}`}
+              </p>
+            )}
+            {estado === 'CONFIRMADO' && persona.confirmado_estado_por_profile && (
+              <p>
+                Confirmado por {persona.confirmado_estado_por_profile.nombres} {persona.confirmado_estado_por_profile.apellidos}
+                {persona.confirmado_estado_at && ` el ${new Date(persona.confirmado_estado_at).toLocaleDateString('es-CO')}`}
+              </p>
+            )}
+            {estado === 'COMPLETADO' && persona.confirmacion && (
+              <p>
+                Completado el {new Date(persona.confirmacion.confirmado_at).toLocaleDateString('es-CO')}
+              </p>
+            )}
+            {estado === 'DATOS_PENDIENTES' && <p>Persona pendiente de verificación</p>}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    )
+  }
+
+  const handleVerificar = async (personaId: string) => {
+    setActionLoading(personaId)
+    try {
+      const response = await fetch(`/api/personas/${personaId}/verificar`, {
+        method: 'POST',
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.error || 'Error al verificar')
+      }
+      toast.success('Persona verificada correctamente')
+      onRefresh?.()
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Error desconocido'
+      toast.error(message)
+    } finally {
+      setActionLoading(null)
     }
+  }
+
+  const handleConfirmarEstado = async (personaId: string) => {
+    setActionLoading(personaId)
+    try {
+      const response = await fetch(`/api/personas/${personaId}/confirmar-estado`, {
+        method: 'POST',
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.error || 'Error al confirmar')
+      }
+      toast.success('Persona confirmada correctamente')
+      onRefresh?.()
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Error desconocido'
+      toast.error(message)
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleReversarEstado = async (personaId: string) => {
+    setActionLoading(personaId)
+    try {
+      const response = await fetch(`/api/personas/${personaId}/reversar-estado`, {
+        method: 'POST',
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.error || 'Error al reversar')
+      }
+      toast.success(data.message || 'Estado reversado correctamente')
+      onRefresh?.()
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Error desconocido'
+      toast.error(message)
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const canVerificar = (persona: PersonaWithConfirmacion) => {
+    if (!profile) return false
+    if (profile.role === 'admin') return true
+    if (profile.role === 'validador' && ['DATOS_PENDIENTES'].includes(persona.estado || '')) return true
+    return false
+  }
+
+  const canConfirmarEstado = (persona: PersonaWithConfirmacion) => {
+    if (!profile) return false
+    if (profile.role === 'admin') return true
+    if (profile.role === 'confirmador' && ['VERIFICADO', 'DATOS_PENDIENTES'].includes(persona.estado || '')) return true
+    return false
+  }
+
+  const canReversarEstado = (persona: PersonaWithConfirmacion) => {
+    if (!profile) return false
+    const estado = persona.estado || 'DATOS_PENDIENTES'
+    if (estado === 'DATOS_PENDIENTES') return false
+    if (profile.role === 'admin') return true
+    if (profile.role === 'coordinador') return true
+    if ((profile.role === 'validador' || profile.role === 'confirmador') && estado !== 'COMPLETADO') return true
+    return false
+  }
+
+  const canCreateNovedad = () => {
+    if (!profile) return false
+    return ['admin', 'coordinador', 'lider', 'validador', 'confirmador'].includes(profile.role)
   }
 
   return (
@@ -181,40 +310,88 @@ export function PersonasTable({
                           <Button 
                             variant="ghost" 
                             className="h-8 w-8 p-0"
+                            disabled={actionLoading === persona.id}
                           >
-                            <MoreHorizontal className="h-4 w-4" />
+                            {actionLoading === persona.id ? (
+                              <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                            ) : (
+                              <MoreHorizontal className="h-4 w-4" />
+                            )}
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-52">
+                        <DropdownMenuContent align="end" className="w-56">
+                          {/* Ver imagen si está completado */}
                           {isConfirmed(persona) && persona.confirmacion?.imagen_url && (
                             <DropdownMenuItem
                               onClick={() => setViewingImage(persona.confirmacion!.imagen_url)}
                               className="cursor-pointer"
                             >
                               <Eye className="mr-2 h-4 w-4" />
-                              Ver Imagen
+                              Ver Imagen Evidencia
                             </DropdownMenuItem>
                           )}
+
+                          {/* Ver/Crear novedades */}
+                          {onNovedad && (
+                            <DropdownMenuItem
+                              onClick={() => onNovedad(persona)}
+                              className="cursor-pointer"
+                            >
+                              <AlertTriangle className="mr-2 h-4 w-4" />
+                              {persona.novedad_activa ? 'Ver Novedad' : 'Novedades'}
+                            </DropdownMenuItem>
+                          )}
+
                           {!isConsultor && (
                             <>
-                              {getPersonaEstado(persona) === 'pending' && (
+                              <DropdownMenuSeparator />
+
+                              {/* Acciones de estado */}
+                              {canVerificar(persona) && (
+                                <DropdownMenuItem
+                                  onClick={() => handleVerificar(persona.id)}
+                                  className="cursor-pointer"
+                                >
+                                  <Shield className="mr-2 h-4 w-4" />
+                                  Verificar
+                                </DropdownMenuItem>
+                              )}
+
+                              {canConfirmarEstado(persona) && (
+                                <DropdownMenuItem
+                                  onClick={() => handleConfirmarEstado(persona.id)}
+                                  className="cursor-pointer"
+                                >
+                                  <ShieldCheck className="mr-2 h-4 w-4" />
+                                  Confirmar Estado
+                                </DropdownMenuItem>
+                              )}
+
+                              {/* Completar (cargar evidencia) */}
+                              {(persona.estado === 'CONFIRMADO' || persona.estado === 'DATOS_PENDIENTES' || persona.estado === 'VERIFICADO') && !isConfirmed(persona) && (
                                 <DropdownMenuItem 
                                   onClick={() => onConfirmVoto(persona)}
                                   className="cursor-pointer"
                                 >
-                                  <CheckCircle2 className="mr-2 h-4 w-4" />
-                                  Confirmar Actividad
+                                  <FileCheck className="mr-2 h-4 w-4" />
+                                  Completar (Cargar Evidencia)
                                 </DropdownMenuItem>
                               )}
-                              {isConfirmed(persona) && (
-                                <DropdownMenuItem 
-                                  onClick={() => onReversarVoto(persona)}
-                                  className="cursor-pointer"
+
+                              {/* Reversar estado */}
+                              {canReversarEstado(persona) && (
+                                <DropdownMenuItem
+                                  onClick={() => handleReversarEstado(persona.id)}
+                                  className="cursor-pointer text-orange-600"
                                 >
-                                  <XCircle className="mr-2 h-4 w-4" />
-                                  Reversar Confirmación
+                                  <Undo2 className="mr-2 h-4 w-4" />
+                                  Reversar Estado
                                 </DropdownMenuItem>
                               )}
+
+                              <DropdownMenuSeparator />
+
+                              {/* Editar y eliminar */}
                               <DropdownMenuItem 
                                 onClick={() => onEdit(persona)}
                                 className="cursor-pointer"

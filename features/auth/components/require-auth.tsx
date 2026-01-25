@@ -4,13 +4,15 @@ import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/features/auth/hooks/use-auth'
 import { Skeleton } from '@/components/ui/skeleton'
+import type { UserRole } from '@/lib/types'
 
-interface RequireAuthProps {
+export interface RequireAuthProps {
   children: React.ReactNode
   requireAdmin?: boolean
+  allowedRoles?: UserRole[]
 }
 
-export function RequireAuth({ children, requireAdmin = false }: RequireAuthProps) {
+export function RequireAuth({ children, requireAdmin = false, allowedRoles }: RequireAuthProps) {
   const router = useRouter()
   const { user, profile, loading, isAdmin } = useAuth()
 
@@ -25,8 +27,13 @@ export function RequireAuth({ children, requireAdmin = false }: RequireAuthProps
         router.push('/dashboard')
         return
       }
+
+      if (allowedRoles && profile && !allowedRoles.includes(profile.role)) {
+        router.push('/dashboard')
+        return
+      }
     }
-  }, [user, loading, isAdmin, requireAdmin, router])
+  }, [user, loading, isAdmin, requireAdmin, router, allowedRoles, profile])
 
   if (loading) {
     return (
@@ -42,6 +49,10 @@ export function RequireAuth({ children, requireAdmin = false }: RequireAuthProps
   }
 
   if (requireAdmin && !isAdmin) {
+    return null
+  }
+
+  if (allowedRoles && profile && !allowedRoles.includes(profile.role)) {
     return null
   }
 

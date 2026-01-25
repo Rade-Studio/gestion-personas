@@ -379,9 +379,12 @@ export function PersonasFilters({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos los estados</SelectItem>
-                <SelectItem value="missing_data">Datos Faltantes</SelectItem>
-                <SelectItem value="pending">Pendientes</SelectItem>
-                <SelectItem value="confirmed">Confirmados</SelectItem>
+                <SelectItem value="DATOS_PENDIENTES">Datos Pendientes</SelectItem>
+                <SelectItem value="CON_NOVEDAD">Con Novedad</SelectItem>
+                <SelectItem value="VERIFICADO">Verificado</SelectItem>
+                <SelectItem value="CONFIRMADO">Confirmado</SelectItem>
+                <SelectItem value="COMPLETADO">Completado</SelectItem>
+                <SelectItem value="missing_data">Sin Puesto/Mesa</SelectItem>
               </SelectContent>
             </Select>
           </div>

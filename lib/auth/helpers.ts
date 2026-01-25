@@ -114,10 +114,12 @@ export async function requireLiderOrAdmin() {
     profile.role !== 'admin' &&
     profile.role !== 'coordinador' &&
     profile.role !== 'lider' &&
+    profile.role !== 'validador' &&
+    profile.role !== 'confirmador' &&
     profile.role !== 'consultor'
   ) {
     throw new Error(
-      'No autorizado: se requiere rol de administrador, coordinador, líder o consultor'
+      'No autorizado: se requiere rol de administrador, coordinador, líder, validador, confirmador o consultor'
     )
   }
 
@@ -297,4 +299,305 @@ export async function requireConsultorOrAdmin() {
     created_at: profile.createdAt.toISOString(),
     updated_at: profile.updatedAt.toISOString(),
   } as Profile
+}
+
+export async function requireValidador() {
+  const profile = await getCurrentProfile()
+  if (!profile || profile.role !== 'validador') {
+    throw new Error('No autorizado: se requiere rol de validador')
+  }
+  return profile
+}
+
+export async function requireConfirmador() {
+  const profile = await getCurrentProfile()
+  if (!profile || profile.role !== 'confirmador') {
+    throw new Error('No autorizado: se requiere rol de confirmador')
+  }
+  return profile
+}
+
+export async function requireValidadorOrAdmin() {
+  const session = await auth()
+  if (!session?.user) {
+    throw new Error('No autenticado')
+  }
+
+  const profile = await prisma.profile.findUnique({
+    where: { id: session.user.id },
+    include: {
+      barrio: true,
+      puestoVotacion: true,
+      filtrosAsignados: { include: { lider: true } },
+    },
+  })
+
+  if (!profile) {
+    throw new Error('No autenticado: no se pudo obtener el perfil')
+  }
+
+  if (profile.role !== 'admin' && profile.role !== 'validador') {
+    throw new Error('No autorizado: se requiere rol de administrador o validador')
+  }
+
+  return {
+    id: profile.id,
+    nombres: profile.nombres,
+    apellidos: profile.apellidos,
+    tipo_documento: profile.tipoDocumento as Profile['tipo_documento'],
+    numero_documento: profile.numeroDocumento,
+    fecha_nacimiento: profile.fechaNacimiento?.toISOString(),
+    telefono: profile.telefono || undefined,
+    direccion: profile.direccion || undefined,
+    barrio_id: profile.barrioId || undefined,
+    barrio: profile.barrio
+      ? {
+          id: profile.barrio.id,
+          codigo: profile.barrio.codigo,
+          nombre: profile.barrio.nombre,
+        }
+      : undefined,
+    role: profile.role as Profile['role'],
+    departamento: profile.departamento || undefined,
+    municipio: profile.municipio || undefined,
+    zona: profile.zona || undefined,
+    candidato_id: profile.candidatoId || undefined,
+    coordinador_id: profile.coordinadorId || undefined,
+    puesto_votacion_id: profile.puestoVotacionId || undefined,
+    puesto_votacion: profile.puestoVotacion
+      ? {
+          id: profile.puestoVotacion.id,
+          codigo: profile.puestoVotacion.codigo,
+          nombre: profile.puestoVotacion.nombre,
+          direccion: profile.puestoVotacion.direccion || undefined,
+        }
+      : undefined,
+    mesa_votacion: profile.mesaVotacion || undefined,
+    created_at: profile.createdAt.toISOString(),
+    updated_at: profile.updatedAt.toISOString(),
+    lideres_asignados_ids: profile.filtrosAsignados.map(f => f.liderId),
+  } as Profile & { lideres_asignados_ids: string[] }
+}
+
+export async function requireConfirmadorOrAdmin() {
+  const session = await auth()
+  if (!session?.user) {
+    throw new Error('No autenticado')
+  }
+
+  const profile = await prisma.profile.findUnique({
+    where: { id: session.user.id },
+    include: {
+      barrio: true,
+      puestoVotacion: true,
+      filtrosAsignados: { include: { lider: true } },
+    },
+  })
+
+  if (!profile) {
+    throw new Error('No autenticado: no se pudo obtener el perfil')
+  }
+
+  if (profile.role !== 'admin' && profile.role !== 'confirmador') {
+    throw new Error('No autorizado: se requiere rol de administrador o confirmador')
+  }
+
+  return {
+    id: profile.id,
+    nombres: profile.nombres,
+    apellidos: profile.apellidos,
+    tipo_documento: profile.tipoDocumento as Profile['tipo_documento'],
+    numero_documento: profile.numeroDocumento,
+    fecha_nacimiento: profile.fechaNacimiento?.toISOString(),
+    telefono: profile.telefono || undefined,
+    direccion: profile.direccion || undefined,
+    barrio_id: profile.barrioId || undefined,
+    barrio: profile.barrio
+      ? {
+          id: profile.barrio.id,
+          codigo: profile.barrio.codigo,
+          nombre: profile.barrio.nombre,
+        }
+      : undefined,
+    role: profile.role as Profile['role'],
+    departamento: profile.departamento || undefined,
+    municipio: profile.municipio || undefined,
+    zona: profile.zona || undefined,
+    candidato_id: profile.candidatoId || undefined,
+    coordinador_id: profile.coordinadorId || undefined,
+    puesto_votacion_id: profile.puestoVotacionId || undefined,
+    puesto_votacion: profile.puestoVotacion
+      ? {
+          id: profile.puestoVotacion.id,
+          codigo: profile.puestoVotacion.codigo,
+          nombre: profile.puestoVotacion.nombre,
+          direccion: profile.puestoVotacion.direccion || undefined,
+        }
+      : undefined,
+    mesa_votacion: profile.mesaVotacion || undefined,
+    created_at: profile.createdAt.toISOString(),
+    updated_at: profile.updatedAt.toISOString(),
+    lideres_asignados_ids: profile.filtrosAsignados.map(f => f.liderId),
+  } as Profile & { lideres_asignados_ids: string[] }
+}
+
+export async function requireFiltroOrAdmin() {
+  const session = await auth()
+  if (!session?.user) {
+    throw new Error('No autenticado')
+  }
+
+  const profile = await prisma.profile.findUnique({
+    where: { id: session.user.id },
+    include: {
+      barrio: true,
+      puestoVotacion: true,
+      filtrosAsignados: { include: { lider: true } },
+    },
+  })
+
+  if (!profile) {
+    throw new Error('No autenticado: no se pudo obtener el perfil')
+  }
+
+  if (profile.role !== 'admin' && profile.role !== 'validador' && profile.role !== 'confirmador') {
+    throw new Error('No autorizado: se requiere rol de administrador, validador o confirmador')
+  }
+
+  return {
+    id: profile.id,
+    nombres: profile.nombres,
+    apellidos: profile.apellidos,
+    tipo_documento: profile.tipoDocumento as Profile['tipo_documento'],
+    numero_documento: profile.numeroDocumento,
+    fecha_nacimiento: profile.fechaNacimiento?.toISOString(),
+    telefono: profile.telefono || undefined,
+    direccion: profile.direccion || undefined,
+    barrio_id: profile.barrioId || undefined,
+    barrio: profile.barrio
+      ? {
+          id: profile.barrio.id,
+          codigo: profile.barrio.codigo,
+          nombre: profile.barrio.nombre,
+        }
+      : undefined,
+    role: profile.role as Profile['role'],
+    departamento: profile.departamento || undefined,
+    municipio: profile.municipio || undefined,
+    zona: profile.zona || undefined,
+    candidato_id: profile.candidatoId || undefined,
+    coordinador_id: profile.coordinadorId || undefined,
+    puesto_votacion_id: profile.puestoVotacionId || undefined,
+    puesto_votacion: profile.puestoVotacion
+      ? {
+          id: profile.puestoVotacion.id,
+          codigo: profile.puestoVotacion.codigo,
+          nombre: profile.puestoVotacion.nombre,
+          direccion: profile.puestoVotacion.direccion || undefined,
+        }
+      : undefined,
+    mesa_votacion: profile.mesaVotacion || undefined,
+    created_at: profile.createdAt.toISOString(),
+    updated_at: profile.updatedAt.toISOString(),
+    lideres_asignados_ids: profile.filtrosAsignados.map(f => f.liderId),
+  } as Profile & { lideres_asignados_ids: string[] }
+}
+
+/**
+ * Verifica si un filtro (validador/confirmador) tiene acceso a una persona
+ * basado en los líderes asignados
+ */
+export async function canFiltroAccessPersona(filtroId: string, personaId: string): Promise<boolean> {
+  const persona = await prisma.persona.findUnique({
+    where: { id: personaId },
+    select: { registradoPorId: true },
+  })
+
+  if (!persona) return false
+
+  const filtroLider = await prisma.filtroLider.findFirst({
+    where: {
+      filtroId,
+      liderId: persona.registradoPorId,
+    },
+  })
+
+  return !!filtroLider
+}
+
+/**
+ * Obtiene los IDs de líderes asignados a un filtro
+ */
+export async function getFiltroLideresIds(filtroId: string): Promise<string[]> {
+  const filtroLideres = await prisma.filtroLider.findMany({
+    where: { filtroId },
+    select: { liderId: true },
+  })
+  return filtroLideres.map(fl => fl.liderId)
+}
+
+/**
+ * Verifica si el usuario puede crear novedades (coordinador, líder, validador, confirmador)
+ */
+export async function requireCanCreateNovedad() {
+  const session = await auth()
+  if (!session?.user) {
+    throw new Error('No autenticado')
+  }
+
+  const profile = await prisma.profile.findUnique({
+    where: { id: session.user.id },
+    include: {
+      barrio: true,
+      puestoVotacion: true,
+      filtrosAsignados: true,
+    },
+  })
+
+  if (!profile) {
+    throw new Error('No autenticado: no se pudo obtener el perfil')
+  }
+
+  const allowedRoles = ['admin', 'coordinador', 'lider', 'validador', 'confirmador']
+  if (!allowedRoles.includes(profile.role)) {
+    throw new Error('No autorizado: no tiene permiso para crear novedades')
+  }
+
+  return {
+    id: profile.id,
+    nombres: profile.nombres,
+    apellidos: profile.apellidos,
+    tipo_documento: profile.tipoDocumento as Profile['tipo_documento'],
+    numero_documento: profile.numeroDocumento,
+    fecha_nacimiento: profile.fechaNacimiento?.toISOString(),
+    telefono: profile.telefono || undefined,
+    direccion: profile.direccion || undefined,
+    barrio_id: profile.barrioId || undefined,
+    barrio: profile.barrio
+      ? {
+          id: profile.barrio.id,
+          codigo: profile.barrio.codigo,
+          nombre: profile.barrio.nombre,
+        }
+      : undefined,
+    role: profile.role as Profile['role'],
+    departamento: profile.departamento || undefined,
+    municipio: profile.municipio || undefined,
+    zona: profile.zona || undefined,
+    candidato_id: profile.candidatoId || undefined,
+    coordinador_id: profile.coordinadorId || undefined,
+    puesto_votacion_id: profile.puestoVotacionId || undefined,
+    puesto_votacion: profile.puestoVotacion
+      ? {
+          id: profile.puestoVotacion.id,
+          codigo: profile.puestoVotacion.codigo,
+          nombre: profile.puestoVotacion.nombre,
+          direccion: profile.puestoVotacion.direccion || undefined,
+        }
+      : undefined,
+    mesa_votacion: profile.mesaVotacion || undefined,
+    created_at: profile.createdAt.toISOString(),
+    updated_at: profile.updatedAt.toISOString(),
+    lideres_asignados_ids: profile.filtrosAsignados?.map(f => f.liderId) || [],
+  } as Profile & { lideres_asignados_ids: string[] }
 }

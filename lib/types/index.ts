@@ -1,5 +1,6 @@
 export type DocumentoTipo = 'CC' | 'CE' | 'Pasaporte' | 'TI' | 'Otro'
-export type UserRole = 'admin' | 'coordinador' | 'lider' | 'consultor'
+export type UserRole = 'admin' | 'coordinador' | 'lider' | 'validador' | 'confirmador' | 'consultor'
+export type PersonaEstado = 'DATOS_PENDIENTES' | 'CON_NOVEDAD' | 'VERIFICADO' | 'CONFIRMADO' | 'COMPLETADO'
 
 export interface Profile {
   id: string
@@ -49,6 +50,13 @@ export interface Persona {
   importacion_id?: string
   created_at: string
   updated_at: string
+  // Nuevos campos de estado y trazabilidad
+  estado: PersonaEstado
+  estado_anterior?: PersonaEstado
+  validado_por?: string
+  validado_at?: string
+  confirmado_estado_por?: string
+  confirmado_estado_at?: string
 }
 
 export interface VotoConfirmacion {
@@ -78,6 +86,17 @@ export interface Importacion {
 
 export interface PersonaWithConfirmacion extends Persona {
   confirmacion?: VotoConfirmacion
+  novedades?: Novedad[]
+  novedad_activa?: Novedad
+  validado_por_profile?: ProfileBasic
+  confirmado_estado_por_profile?: ProfileBasic
+}
+
+export interface ProfileBasic {
+  id: string
+  nombres: string
+  apellidos: string
+  numero_documento: string
 }
 
 export interface Candidato {
@@ -103,5 +122,36 @@ export interface PuestoVotacion {
   codigo: string
   nombre: string
   direccion?: string
+}
+
+export interface Novedad {
+  id: string
+  observacion: string
+  resuelta: boolean
+  resuelta_at?: string
+  persona_id: string
+  creada_por: string
+  creada_por_profile?: ProfileBasic
+  resuelta_por?: string
+  resuelta_por_profile?: ProfileBasic
+  created_at: string
+  updated_at: string
+}
+
+export interface FiltroLider {
+  id: string
+  filtro_id: string
+  lider_id: string
+  created_at: string
+}
+
+export interface Filtro extends Profile {
+  lideres_asignados?: ProfileBasic[]
+  lideres_count?: number
+  coordinador?: ProfileBasic
+  candidato?: {
+    id: string
+    nombre_completo: string
+  }
 }
 

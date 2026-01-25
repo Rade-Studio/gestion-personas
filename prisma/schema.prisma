@@ -26,7 +26,17 @@ enum UserRole {
   admin
   coordinador
   lider
+  validador
+  confirmador
   consultor
+}
+
+enum PersonaEstado {
+  DATOS_PENDIENTES
+  CON_NOVEDAD
+  VERIFICADO
+  CONFIRMADO
+  COMPLETADO
 }
 
 // ============================================================================
@@ -116,9 +126,19 @@ model Profile {
 
   // Back relations
   personasRegistradas      Persona[]          @relation("PersonaRegistradaPor")
+  personasValidadas        Persona[]          @relation("PersonaValidadaPor")
+  personasConfirmadasEstado Persona[]         @relation("PersonaConfirmadaEstadoPor")
   confirmacionesRealizadas VotoConfirmacion[] @relation("ConfirmadoPor")
   confirmacionesReversadas VotoConfirmacion[] @relation("ReversadoPor")
   importaciones            Importacion[]
+  
+  // Filtros (Validador/Confirmador) relations
+  filtrosAsignados         FiltroLider[]      @relation("FiltroAsignado")
+  lideresAsignados         FiltroLider[]      @relation("LiderAsignado")
+  
+  // Novedades relations
+  novedadesCreadas         Novedad[]          @relation("NovedadCreadaPor")
+  novedadesResueltas       Novedad[]          @relation("NovedadResueltaPor")
 
   @@index([role])
   @@index([numeroDocumento])
@@ -151,6 +171,20 @@ model Persona {
   createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz
   updatedAt        DateTime      @updatedAt @map("updated_at") @db.Timestamptz
 
+  // Estado y trazabilidad
+  estado                   PersonaEstado @default(DATOS_PENDIENTES)
+  estadoAnterior           PersonaEstado? @map("estado_anterior")
+  
+  // Validación (por Validador)
+  validadoPorId            String?       @map("validado_por")
+  validadoPor              Profile?      @relation("PersonaValidadaPor", fields: [validadoPorId], references: [id], onDelete: SetNull)
+  validadoAt               DateTime?     @map("validado_at") @db.Timestamptz
+  
+  // Confirmación de estado (por Confirmador - diferente a VotoConfirmacion/COMPLETADO)
+  confirmadoEstadoPorId    String?       @map("confirmado_estado_por")
+  confirmadoEstadoPor      Profile?      @relation("PersonaConfirmadaEstadoPor", fields: [confirmadoEstadoPorId], references: [id], onDelete: SetNull)
+  confirmadoEstadoAt       DateTime?     @map("confirmado_estado_at") @db.Timestamptz
+
   // Relations
   registradoPorId  String        @map("registrado_por")
   registradoPor    Profile       @relation("PersonaRegistradaPor", fields: [registradoPorId], references: [id], onDelete: Cascade)
@@ -166,6 +200,7 @@ model Persona {
 
   // Back relations
   confirmaciones   VotoConfirmacion[]
+  novedades        Novedad[]
 
   @@index([numeroDocumento])
   @@index([registradoPorId])
@@ -174,6 +209,9 @@ model Persona {
   @@index([puestoVotacionId])
   @@index([departamento])
   @@index([municipio])
+  @@index([estado])
+  @@index([validadoPorId])
+  @@index([confirmadoEstadoPorId])
   @@map("personas")
 }
 
@@ -269,4 +307,52 @@ model PuestoVotacion {
 
   @@index([codigo])
   @@map("puestos_votacion")
+}
+
+// ============================================================================
+// FILTROS (Validadores/Confirmadores) Y NOVEDADES
+// ============================================================================
+
+model FiltroLider {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  // Filtro (Validador o Confirmador)
+  filtroId  String   @map("filtro_id")
+  filtro    Profile  @relation("FiltroAsignado", fields: [filtroId], references: [id], onDelete: Cascade)
+
+  // Líder asignado al filtro
+  liderId   String   @map("lider_id")
+  lider     Profile  @relation("LiderAsignado", fields: [liderId], references: [id], onDelete: Cascade)
+
+  @@unique([filtroId, liderId])
+  @@index([filtroId])
+  @@index([liderId])
+  @@map("filtros_lideres")
+}
+
+model Novedad {
+  id           String    @id @default(uuid())
+  observacion  String    @db.Text
+  resuelta     Boolean   @default(false)
+  resueltaAt   DateTime? @map("resuelta_at") @db.Timestamptz
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Persona con novedad
+  personaId    String    @map("persona_id")
+  persona      Persona   @relation(fields: [personaId], references: [id], onDelete: Cascade)
+
+  // Quien creó la novedad
+  creadaPorId  String    @map("creada_por")
+  creadaPor    Profile   @relation("NovedadCreadaPor", fields: [creadaPorId], references: [id], onDelete: Cascade)
+
+  // Quien resolvió la novedad (opcional)
+  resueltaPorId String?  @map("resuelta_por")
+  resueltaPor   Profile? @relation("NovedadResueltaPor", fields: [resueltaPorId], references: [id], onDelete: SetNull)
+
+  @@index([personaId])
+  @@index([resuelta])
+  @@index([creadaPorId])
+  @@map("novedades")
 }

@@ -90,16 +90,31 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Create confirmacion record
+    // Create confirmacion record and update persona state to COMPLETADO
     try {
-      const confirmacion = await prisma.votoConfirmacion.create({
-        data: {
-          personaId,
-          imagenUrl,
-          imagenPath,
-          confirmadoPorId: profile.id,
-        },
+      // Get current persona state
+      const personaActual = await prisma.persona.findUnique({
+        where: { id: personaId },
+        select: { estado: true },
       })
+
+      const [confirmacion] = await prisma.$transaction([
+        prisma.votoConfirmacion.create({
+          data: {
+            personaId,
+            imagenUrl,
+            imagenPath,
+            confirmadoPorId: profile.id,
+          },
+        }),
+        prisma.persona.update({
+          where: { id: personaId },
+          data: {
+            estado: 'COMPLETADO',
+            estadoAnterior: personaActual?.estado || 'DATOS_PENDIENTES',
+          },
+        }),
+      ])
 
       // Transform to match expected format
       const response = {

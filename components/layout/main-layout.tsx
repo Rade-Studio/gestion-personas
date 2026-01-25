@@ -31,7 +31,7 @@ import {
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
 import Link from 'next/link'
-import { LogOut, User, LayoutDashboard, Users, UserCog, Award, Building2, Loader2 } from 'lucide-react'
+import { LogOut, User, LayoutDashboard, Users, UserCog, Award, Building2, Loader2, Filter } from 'lucide-react'
 
 interface MainLayoutProps {
   children: React.ReactNode
@@ -82,11 +82,13 @@ export function MainLayout({ children }: MainLayoutProps) {
         ? [
             { href: '/coordinadores', label: 'Coordinadores', icon: Building2 },
             { href: '/lideres', label: 'Líderes', icon: UserCog },
+            { href: '/filtros', label: 'Filtros', icon: Filter },
             { href: '/candidatos', label: 'Representantes', icon: Award },
           ]
         : isCoordinador
         ? [
             { href: '/lideres', label: 'Líderes', icon: UserCog },
+            { href: '/filtros', label: 'Filtros', icon: Filter },
           ]
         : []),
     ],

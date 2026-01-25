@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/prisma'
-import { requireLiderOrAdmin, requireConsultorOrAdmin } from '@/lib/auth/helpers'
+import { requireLiderOrAdmin, requireConsultorOrAdmin, getFiltroLideresIds } from '@/lib/auth/helpers'
 import { personaSchema } from '@/features/personas/validations/persona'
 import {
   isDocumentValidationEnabled,
-  checkDocumentExists,
   createPerson,
   getDocumentInfo,
 } from '@/lib/pocketbase/client'
-import type { DocumentoTipo } from '@prisma/client'
+import type { DocumentoTipo, PersonaEstado } from '@prisma/client'
 
 export async function GET(request: NextRequest) {
   try {
@@ -27,6 +26,7 @@ export async function GET(request: NextRequest) {
     const liderId = searchParams.get('lider_id')
     const coordinadorId = searchParams.get('coordinador_id')
     const estado = searchParams.get('estado')
+    const estadoNuevo = searchParams.get('estado_nuevo') as PersonaEstado | null // Nuevo filtro por PersonaEstado
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '10')
     const offset = (page - 1) * limit
@@ -86,6 +86,27 @@ export async function GET(request: NextRequest) {
       }
     } else if (profile.role === 'lider') {
       where.registradoPorId = profile.id
+    } else if (profile.role === 'validador' || profile.role === 'confirmador') {
+      // Filtros solo ven personas de sus líderes asignados
+      const lideresAsignados = await getFiltroLideresIds(profile.id)
+      if (lideresAsignados.length === 0) {
+        return NextResponse.json({
+          data: [],
+          pagination: { page, limit, total: 0, totalPages: 0 },
+        })
+      }
+      where.registradoPorId = { in: lideresAsignados }
+    }
+
+    // Filtrar por estado nuevo (PersonaEstado)
+    if (estadoNuevo) {
+      where.estado = estadoNuevo
+    }
+
+    // Si el filtro estado es un valor del enum PersonaEstado, aplicar directamente
+    const personaEstadoValues = ['DATOS_PENDIENTES', 'CON_NOVEDAD', 'VERIFICADO', 'CONFIRMADO', 'COMPLETADO']
+    if (estado && personaEstadoValues.includes(estado)) {
+      where.estado = estado as PersonaEstado
     }
 
     // Handle multiple puesto_votacion filters
@@ -128,6 +149,16 @@ export async function GET(request: NextRequest) {
           },
           barrio: { select: { id: true, codigo: true, nombre: true } },
           puestoVotacion: { select: { id: true, codigo: true, nombre: true, direccion: true } },
+          novedades: {
+            where: { resuelta: false },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            include: {
+              creadaPor: { select: { id: true, nombres: true, apellidos: true, numeroDocumento: true } },
+            },
+          },
+          validadoPor: { select: { id: true, nombres: true, apellidos: true, numeroDocumento: true } },
+          confirmadoEstadoPor: { select: { id: true, nombres: true, apellidos: true, numeroDocumento: true } },
         },
         orderBy: { createdAt: 'desc' },
         skip: queryOffset,
@@ -146,6 +177,8 @@ export async function GET(request: NextRequest) {
           .filter((c) => !c.reversado)
           .sort((a, b) => b.confirmadoAt.getTime() - a.confirmadoAt.getTime())[0] ||
         confirmaciones.sort((a, b) => b.confirmadoAt.getTime() - a.confirmadoAt.getTime())[0]
+
+      const novedadActiva = persona.novedades?.[0]
 
       return {
         id: persona.id,
@@ -172,6 +205,46 @@ export async function GET(request: NextRequest) {
         importacion_id: persona.importacionId,
         created_at: persona.createdAt.toISOString(),
         updated_at: persona.updatedAt.toISOString(),
+        // Nuevo sistema de estados
+        estado: persona.estado,
+        estado_anterior: persona.estadoAnterior,
+        validado_por: persona.validadoPorId,
+        validado_at: persona.validadoAt?.toISOString(),
+        validado_por_profile: persona.validadoPor
+          ? {
+              id: persona.validadoPor.id,
+              nombres: persona.validadoPor.nombres,
+              apellidos: persona.validadoPor.apellidos,
+              numero_documento: persona.validadoPor.numeroDocumento,
+            }
+          : undefined,
+        confirmado_estado_por: persona.confirmadoEstadoPorId,
+        confirmado_estado_at: persona.confirmadoEstadoAt?.toISOString(),
+        confirmado_estado_por_profile: persona.confirmadoEstadoPor
+          ? {
+              id: persona.confirmadoEstadoPor.id,
+              nombres: persona.confirmadoEstadoPor.nombres,
+              apellidos: persona.confirmadoEstadoPor.apellidos,
+              numero_documento: persona.confirmadoEstadoPor.numeroDocumento,
+            }
+          : undefined,
+        novedad_activa: novedadActiva
+          ? {
+              id: novedadActiva.id,
+              observacion: novedadActiva.observacion,
+              resuelta: novedadActiva.resuelta,
+              creada_por: novedadActiva.creadaPorId,
+              creada_por_profile: novedadActiva.creadaPor
+                ? {
+                    id: novedadActiva.creadaPor.id,
+                    nombres: novedadActiva.creadaPor.nombres,
+                    apellidos: novedadActiva.creadaPor.apellidos,
+                    numero_documento: novedadActiva.creadaPor.numeroDocumento,
+                  }
+                : undefined,
+              created_at: novedadActiva.createdAt.toISOString(),
+            }
+          : undefined,
         confirmacion: confirmacion
           ? {
               id: confirmacion.id,
