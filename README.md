@@ -1,116 +1,55 @@
 # Sistema de Gestión de Votantes
 
-Sistema web para la gestión de votantes electorales desarrollado con Next.js, Supabase y shadcn/ui.
+Sistema web para la gestión de votantes electorales desarrollado con Next.js, Prisma, Auth.js y Cloudflare R2.
+
+## 📚 Documentación
+
+La documentación completa del sistema está organizada en la carpeta [`docs/`](../docs/):
+
+- **[Documentación Principal](../docs/README.md)**: Índice general de toda la documentación
+- **[Documentación para Cliente](../docs/cliente/README.md)**: Manuales y guías para usuarios finales
+- **[Documentación Técnica](../docs/tecnica/README.md)**: Guías para desarrolladores y administradores
+
+### Inicio Rápido
+
+- **Nuevos usuarios**: Empiece con la [Guía de Inicio Rápido](../docs/cliente/guia-inicio-rapido.md)
+- **Desarrolladores**: Revise la [Guía de Instalación](../docs/tecnica/instalacion.md)
 
 ## Características
 
-- **Autenticación y Roles**: Sistema de autenticación con dos tipos de usuarios (Admin y Líder)
-- **CRUD de Personas**: Gestión completa de votantes con validaciones
+- **Autenticación y Roles**: Sistema de autenticación con 6 roles (Admin, Coordinador, Líder, Validador, Confirmador, Consultor)
+- **CRUD de Personas**: Gestión completa de votantes con validaciones y estados
 - **Confirmación de Voto**: Sistema de confirmación con subida de imágenes
 - **Importación Masiva**: Importación de datos desde archivos Excel
-- **Filtros y Búsqueda**: Sistema avanzado de filtros por puesto, mesa, documento y líder
-- **Dashboard**: Resumen con métricas y conteos
-- **Gestión de Líderes**: CRUD de líderes para administradores
+- **Filtros y Búsqueda**: Sistema avanzado de filtros por puesto, mesa, documento, líder y coordinador
+- **Dashboard**: Resumen con métricas y conteos con gráficos avanzados
+- **Gestión de Usuarios**: CRUD completo de líderes, coordinadores, validadores y confirmadores
+- **Sistema de Filtros**: Asignación granular de líderes a validadores/confirmadores
+- **Sistema de Novedades**: Gestión de observaciones y problemas
 
 ## Requisitos Previos
 
 - Node.js 18+ y pnpm
-- Cuenta de Supabase
-- Bucket de almacenamiento configurado en Supabase
+- PostgreSQL (Railway, Supabase, o local)
+- Cloudflare R2 o servicio S3-compatible para almacenamiento
 
-## Configuración
+## Instalación Rápida
 
-### 1. Variables de Entorno
+Para una guía completa de instalación, consulte la [Guía de Instalación](../docs/tecnica/instalacion.md).
 
-Crea un archivo `.env.local` en la raíz del proyecto:
+### Pasos Básicos
 
-```env
-NEXT_PUBLIC_SUPABASE_URL=tu_url_de_supabase
-NEXT_PUBLIC_SUPABASE_ANON_KEY=tu_clave_anonima_de_supabase
-SUPABASE_SERVICE_ROLE_KEY=tu_service_role_key_de_supabase
-NEXT_PUBLIC_ENABLE_ADMIN_CHARTS=true
-NEXT_PUBLIC_SHOW_CANDIDATOS_ADS=true
+1. **Configurar variables de entorno**: Crear `.env.local` con las credenciales necesarias
+2. **Instalar dependencias**: `pnpm install`
+3. **Configurar base de datos**: Ejecutar migraciones de Prisma
+4. **Configurar almacenamiento**: Configurar Cloudflare R2 o S3
+5. **Ejecutar**: `pnpm dev`
 
-# Validación de Documentos con PocketBase (Opcional)
-DOCUMENTO_VALIDATION_ENABLED=false
-POCKETBASE_URL=http://localhost:8090
-POCKETBASE_EMAIL=tu_email_de_pocketbase
-POCKETBASE_PASSWORD=tu_contraseña_de_pocketbase
-
-# Fecha de Expedición (Opcional)
-FECHA_EXPEDICION_REQUIRED=false
-
-# Ubicación por Defecto (Opcional)
-NEXT_PUBLIC_USE_DEFAULT_LOCATION=false
-NEXT_PUBLIC_DEFAULT_DEPARTAMENTO=Atlántico
-NEXT_PUBLIC_DEFAULT_MUNICIPIO=Soledad
-
-# Dominio del correo electrónico del sistema
-# Los correos se generan automáticamente como: {numero_documento}{SYSTEM_EMAIL_DOMAIN}
-# Ejemplo: si SYSTEM_EMAIL_DOMAIN=@sistema.local y numero_documento=1234567890
-# El correo será: 1234567890@sistema.local
-SYSTEM_EMAIL_DOMAIN=@sistema.local
-```
-
-**Importante**: La `SUPABASE_SERVICE_ROLE_KEY` es necesaria para crear usuarios (líderes) desde el panel de administración. Puedes encontrarla en tu dashboard de Supabase en **Settings > API > service_role key**. **Nunca expongas esta clave en el cliente**, solo úsala en el servidor.
-
-**Gráficos de Administrador**: La variable `NEXT_PUBLIC_ENABLE_ADMIN_CHARTS` controla la visualización de gráficos estadísticos avanzados en el dashboard. Solo son visibles para usuarios con rol de administrador. Establece en `true` para habilitar o `false` para deshabilitar.
-
-**Publicidad de Candidatos**: La variable `NEXT_PUBLIC_SHOW_CANDIDATOS_ADS` controla la visualización del modal de publicidad de candidatos en la página de login. Establece en `true` para habilitar o `false` para deshabilitar. Cuando está habilitado, el modal se muestra automáticamente al cargar la página de login con la información de los candidatos disponibles.
-
-**Validación de Documentos con PocketBase**: Las variables `DOCUMENTO_VALIDATION_ENABLED`, `POCKETBASE_URL`, `POCKETBASE_EMAIL` y `POCKETBASE_PASSWORD` controlan la validación intermedia de documentos duplicados mediante PocketBase. Cuando está habilitado (`DOCUMENTO_VALIDATION_ENABLED=true`), el sistema valida si un número de documento ya existe en PocketBase antes de registrar o importar personas. Si el documento existe, se omite el registro. Si no existe, se crea en Supabase y se sincroniza con PocketBase. Al eliminar una persona, también se elimina de PocketBase. Si PocketBase no está disponible o la validación está deshabilitada, el sistema continúa funcionando normalmente solo con Supabase.
-
-**Fecha de Expedición**: La variable `FECHA_EXPEDICION_REQUIRED` controla si el campo `fecha_expedicion` es obligatorio u opcional. Cuando está configurado como `true`, el campo es requerido al crear o actualizar personas desde el formulario o al importar desde Excel. Si falta este campo cuando es obligatorio, la persona estará en estado "missing_data" (Datos Faltantes) en lugar de "pending" (Pendiente). Cuando está configurado como `false`, el campo es opcional y no afecta el estado de la persona.
-
-### 2. Base de Datos
-
-Ejecuta las migraciones SQL en tu proyecto de Supabase:
-
-1. Ve a SQL Editor en tu dashboard de Supabase
-2. Ejecuta las migraciones en orden cronológico desde la carpeta `supabase/migrations/`:
-   - `20251118151403_initial_db.sql`
-   - `20251118151634_initial_db_01.sql`
-   - `20251118160000_fix_profiles_rls_recursion.sql`
-   - `20251118170000_setup_storage_bucket.sql`
-   - `20251118180000_fix_voto_confirmaciones_admin_insert.sql`
-   - `20251118190000_add_departamento_municipio_personas.sql`
-   - `20251118200000_add_candidatos_and_lider_fields.sql`
-   - `20251118210000_setup_candidatos_storage_bucket.sql`
-   - `20251119000000_add_public_candidatos_policy.sql` (necesaria para la publicidad de candidatos)
-
-### 3. Storage Bucket
-
-Crea un bucket en Supabase Storage llamado `voto-imagenes`:
-
-1. Ve a **Storage** en tu dashboard de Supabase
-2. Haz clic en **"New bucket"** o **"Crear bucket"**
-3. Configura el bucket:
-   - **Name**: `voto-imagenes`
-   - **Public bucket**: ✅ Marca esta opción (para que las imágenes sean accesibles públicamente)
-   - **File size limit**: `5242880` (5MB en bytes)
-   - **Allowed MIME types**: `image/jpeg, image/jpg, image/png, image/gif, image/webp`
-4. Haz clic en **"Create bucket"**
-
-**Importante**: Después de crear el bucket, ejecuta la migración SQL para configurar las políticas RLS:
-
-1. Ve a **SQL Editor** en tu dashboard de Supabase
-2. Ejecuta el contenido de `supabase/migrations/20251118170000_setup_storage_bucket.sql`
-
-### 4. Instalación de Dependencias
-
-```bash
-pnpm install
-```
-
-### 5. Ejecutar en Desarrollo
-
-```bash
-pnpm dev
-```
-
-El servidor estará disponible en `http://localhost:3000`
+Ver la [documentación técnica completa](../docs/tecnica/instalacion.md) para detalles.
 
 ## Estructura del Proyecto
+
+Para información detallada sobre la arquitectura, consulte la [Documentación de Arquitectura](../docs/tecnica/arquitectura.md).
 
 ```
 pp-gestion/
@@ -119,76 +58,116 @@ pp-gestion/
 │   ├── auth/              # Páginas de autenticación
 │   ├── dashboard/          # Dashboard principal
 │   ├── personas/           # Gestión de personas
-│   ├── lideres/            # Gestión de líderes (solo admin)
+│   ├── lideres/            # Gestión de líderes
+│   ├── coordinadores/      # Gestión de coordinadores
+│   ├── candidatos/         # Gestión de candidatos
+│   ├── filtros/            # Gestión de filtros
 │   └── perfil/             # Perfil de usuario
 ├── components/             # Componentes React
 │   ├── ui/                # Componentes de shadcn/ui
-│   ├── layout/            # Componentes de layout
-│   ├── personas/          # Componentes de personas
-│   └── auth/              # Componentes de autenticación
+│   └── layout/            # Componentes de layout
+├── features/               # Features organizados por módulo
+│   ├── auth/
+│   ├── personas/
+│   ├── candidatos/
+│   ├── dashboard/
+│   ├── filtros/
+│   ├── lideres/
+│   ├── coordinadores/
+│   └── novedades/
 ├── lib/                    # Utilidades y helpers
-│   ├── supabase/          # Clientes de Supabase
 │   ├── auth/              # Helpers de autenticación
-│   ├── types/             # Tipos TypeScript
-│   └── validations/       # Esquemas de validación Zod
-├── hooks/                  # Custom hooks
-├── supabase/               # Migraciones SQL
+│   ├── db/                # Cliente Prisma
+│   ├── storage/           # Cliente de almacenamiento
+│   └── types/             # Tipos TypeScript
+├── prisma/                 # Schema y migraciones
 └── public/                 # Archivos estáticos
 ```
 
 ## Roles y Permisos
 
+El sistema cuenta con 6 roles diferentes. Para información detallada, consulte la [Documentación de Funcionalidades](../docs/cliente/funcionalidades.md#sistema-de-roles-y-permisos).
+
 ### Administrador (Admin)
 - Acceso completo a todos los datos
-- Puede gestionar líderes (CRUD)
+- Puede gestionar todos los usuarios (CRUD)
 - Ve todas las personas sin filtros
-- Acceso a todas las funcionalidades
+- Acceso a gráficos y estadísticas avanzadas
+
+### Coordinador
+- Gestiona líderes asignados
+- Ve personas de sus líderes
+- Puede crear validadores/confirmadores
+- Asigna líderes a filtros
 
 ### Líder
 - Solo ve y gestiona sus propias personas registradas
 - Puede confirmar votos de sus personas
 - Puede editar su propio perfil
-- No puede gestionar otros usuarios
+
+### Validador
+- Solo ve personas de líderes asignados
+- Puede validar personas (cambiar a VERIFICADO)
+- Puede crear novedades
+
+### Confirmador
+- Solo ve personas de líderes asignados
+- Puede confirmar estados (cambiar a CONFIRMADO)
+- Puede crear novedades
+
+### Consultor
+- Solo lectura de información
+- No puede modificar datos
 
 ## Funcionalidades Principales
 
+Para un catálogo completo de funcionalidades, consulte la [Documentación de Funcionalidades](../docs/cliente/funcionalidades.md).
+
 ### Gestión de Personas
-- Crear, editar, eliminar personas
-- Campos obligatorios: nombres, apellidos, tipo y número de documento, puesto y mesa de votación
-- Campos opcionales: fecha de nacimiento, celular, dirección, barrio
-- La edad se calcula automáticamente
+- CRUD completo de personas
+- Sistema de estados (DATOS_PENDIENTES, CON_NOVEDAD, VERIFICADO, CONFIRMADO, COMPLETADO)
+- Validación de duplicados
+- Campos obligatorios y opcionales
+- Cálculo automático de edad
 
 ### Confirmación de Voto
 - Subir imagen como evidencia (máx. 5MB, solo imágenes)
 - Reversar confirmación en caso de error
-- Visualización de imágenes de confirmación
+- Historial de confirmaciones
+- Visualización de imágenes
 
 ### Importación Masiva
 - Descargar plantilla Excel
 - Importar archivos Excel con validaciones
-- Reporte de éxitos y errores
-- Validación de duplicados
+- Reporte detallado de éxitos y errores
+- Validación de duplicados (local y opcionalmente PocketBase)
 
-### Filtros
-- Por puesto de votación
-- Por mesa de votación
-- Por número de documento
-- Por líder (solo admin)
+### Dashboard y Estadísticas
+- Métricas por rol
+- Conteos en tiempo real
+- Gráficos avanzados (solo admin, opcional)
+- Filtrado automático según permisos
 
-### Dashboard
-- Conteo de personas registradas
-- Conteo de votos confirmados
-- Conteo de pendientes
-- Filtrado automático por rol
-- Gráficos estadísticos avanzados (solo admin, controlado por `NEXT_PUBLIC_ENABLE_ADMIN_CHARTS`):
-  - Estadísticas por líder (confirmados vs pendientes)
-  - Personas registradas por departamento y municipio
-  - Votos confirmados por departamento y municipio
+### Gestión de Usuarios
+- CRUD de líderes, coordinadores, validadores y confirmadores
+- Sistema de filtros (asignación de líderes)
+- Relaciones coordinador-líder
+- Gestión de candidatos
+
+### Sistema de Novedades
+- Crear y resolver novedades
+- Bloqueo de estados hasta resolución
+- Trazabilidad completa
 
 ## Tecnologías Utilizadas
 
-- **Next.js 16**: Framework React
-- **Supabase**: Backend y base de datos
+Para información detallada sobre el stack tecnológico, consulte la [Documentación de Arquitectura](../docs/tecnica/arquitectura.md).
+
+- **Next.js 16**: Framework React con App Router
+- **PostgreSQL**: Base de datos relacional
+- **Prisma**: ORM para acceso a datos
+- **Auth.js**: Autenticación y autorización
+- **Cloudflare R2**: Almacenamiento de objetos (S3-compatible)
 - **shadcn/ui**: Componentes UI
 - **TypeScript**: Tipado estático
 - **Zod**: Validación de esquemas
@@ -196,15 +175,12 @@ pp-gestion/
 - **ExcelJS**: Procesamiento de archivos Excel
 - **Tailwind CSS**: Estilos
 
-## Notas Importantes
+## Documentación Adicional
 
-1. **Storage Bucket**: Asegúrate de crear el bucket `voto-imagenes` en Supabase Storage antes de usar la funcionalidad de confirmación de voto.
-
-2. **RLS Policies**: Las políticas RLS están configuradas en las migraciones. Asegúrate de que estén activas.
-
-3. **Primer Usuario Admin**: Necesitarás crear el primer usuario administrador manualmente en Supabase o mediante SQL.
-
-4. **Contraseñas por Defecto**: Los líderes creados por admin tienen contraseñas por defecto que no requieren cambio en el primer login.
+- **[Manual de Usuario](../docs/cliente/manual-usuario.md)**: Guía completa paso a paso
+- **[Limitaciones](../docs/cliente/limitaciones.md)**: Restricciones y consideraciones
+- **[Guía de Migración](../docs/tecnica/migracion.md)**: Migración de Supabase a Railway
+- **[Scripts](../docs/tecnica/scripts.md)**: Scripts de utilidad disponibles
 
 ## Desarrollo
 

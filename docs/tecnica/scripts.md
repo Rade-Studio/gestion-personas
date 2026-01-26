@@ -116,4 +116,3 @@ Solo úsalo en:
 **No se pueden eliminar usuarios**
 - Verifica que tengas la service role key correcta
 - Algunos usuarios pueden requerir eliminación manual desde el dashboard
-
