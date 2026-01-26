@@ -4,16 +4,16 @@ Sistema web para la gestión de votantes electorales desarrollado con Next.js, P
 
 ## 📚 Documentación
 
-La documentación completa del sistema está organizada en la carpeta [`docs/`](../docs/):
+La documentación completa del sistema está organizada en la carpeta [`docs/`](./docs/):
 
-- **[Documentación Principal](../docs/README.md)**: Índice general de toda la documentación
-- **[Documentación para Cliente](../docs/cliente/README.md)**: Manuales y guías para usuarios finales
-- **[Documentación Técnica](../docs/tecnica/README.md)**: Guías para desarrolladores y administradores
+- **[Documentación Principal](./docs/README.md)**: Índice general de toda la documentación
+- **[Documentación para Cliente](./docs/cliente/README.md)**: Manuales y guías para usuarios finales
+- **[Documentación Técnica](./docs/tecnica/README.md)**: Guías para desarrolladores y administradores
 
 ### Inicio Rápido
 
-- **Nuevos usuarios**: Empiece con la [Guía de Inicio Rápido](../docs/cliente/guia-inicio-rapido.md)
-- **Desarrolladores**: Revise la [Guía de Instalación](../docs/tecnica/instalacion.md)
+- **Nuevos usuarios**: Empiece con la [Guía de Inicio Rápido](./docs/cliente/guia-inicio-rapido.md)
+- **Desarrolladores**: Revise la [Guía de Instalación](./docs/tecnica/instalacion.md)
 
 ## Características
 
@@ -35,7 +35,7 @@ La documentación completa del sistema está organizada en la carpeta [`docs/`](
 
 ## Instalación Rápida
 
-Para una guía completa de instalación, consulte la [Guía de Instalación](../docs/tecnica/instalacion.md).
+Para una guía completa de instalación, consulte la [Guía de Instalación](./docs/tecnica/instalacion.md).
 
 ### Pasos Básicos
 
@@ -45,11 +45,11 @@ Para una guía completa de instalación, consulte la [Guía de Instalación](../
 4. **Configurar almacenamiento**: Configurar Cloudflare R2 o S3
 5. **Ejecutar**: `pnpm dev`
 
-Ver la [documentación técnica completa](../docs/tecnica/instalacion.md) para detalles.
+Ver la [documentación técnica completa](./docs/tecnica/instalacion.md) para detalles.
 
 ## Estructura del Proyecto
 
-Para información detallada sobre la arquitectura, consulte la [Documentación de Arquitectura](../docs/tecnica/arquitectura.md).
+Para información detallada sobre la arquitectura, consulte la [Documentación de Arquitectura](./docs/tecnica/arquitectura.md).
 
 ```
 pp-gestion/
@@ -86,7 +86,7 @@ pp-gestion/
 
 ## Roles y Permisos
 
-El sistema cuenta con 6 roles diferentes. Para información detallada, consulte la [Documentación de Funcionalidades](../docs/cliente/funcionalidades.md#sistema-de-roles-y-permisos).
+El sistema cuenta con 6 roles diferentes. Para información detallada, consulte la [Documentación de Funcionalidades](./docs/cliente/funcionalidades.md#sistema-de-roles-y-permisos).
 
 ### Administrador (Admin)
 - Acceso completo a todos los datos
@@ -121,7 +121,7 @@ El sistema cuenta con 6 roles diferentes. Para información detallada, consulte 
 
 ## Funcionalidades Principales
 
-Para un catálogo completo de funcionalidades, consulte la [Documentación de Funcionalidades](../docs/cliente/funcionalidades.md).
+Para un catálogo completo de funcionalidades, consulte la [Documentación de Funcionalidades](./docs/cliente/funcionalidades.md).
 
 ### Gestión de Personas
 - CRUD completo de personas
@@ -161,7 +161,7 @@ Para un catálogo completo de funcionalidades, consulte la [Documentación de Fu
 
 ## Tecnologías Utilizadas
 
-Para información detallada sobre el stack tecnológico, consulte la [Documentación de Arquitectura](../docs/tecnica/arquitectura.md).
+Para información detallada sobre el stack tecnológico, consulte la [Documentación de Arquitectura](./docs/tecnica/arquitectura.md).
 
 - **Next.js 16**: Framework React con App Router
 - **PostgreSQL**: Base de datos relacional
@@ -177,10 +177,10 @@ Para información detallada sobre el stack tecnológico, consulte la [Documentac
 
 ## Documentación Adicional
 
-- **[Manual de Usuario](../docs/cliente/manual-usuario.md)**: Guía completa paso a paso
-- **[Limitaciones](../docs/cliente/limitaciones.md)**: Restricciones y consideraciones
-- **[Guía de Migración](../docs/tecnica/migracion.md)**: Migración de Supabase a Railway
-- **[Scripts](../docs/tecnica/scripts.md)**: Scripts de utilidad disponibles
+- **[Manual de Usuario](./docs/cliente/manual-usuario.md)**: Guía completa paso a paso
+- **[Limitaciones](./docs/cliente/limitaciones.md)**: Restricciones y consideraciones
+- **[Guía de Migración](./docs/tecnica/migracion.md)**: Migración de Supabase a Railway
+- **[Scripts](./docs/tecnica/scripts.md)**: Scripts de utilidad disponibles
 
 ## Desarrollo
 
