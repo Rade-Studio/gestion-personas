@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
 
     let query = supabase
       .from('personas')
-      .select('*, voto_confirmaciones(*), barrios(id, codigo, nombre), puestos_votacion(id, codigo, nombre)', {
+      .select('*, voto_confirmaciones(*), barrios(id, codigo, nombre), puestos_votacion(id, codigo, nombre), profiles!personas_registrado_por_fkey(nombres, apellidos)', {
         count: 'exact',
       })
 
@@ -71,6 +71,7 @@ export async function GET(request: NextRequest) {
             { header: 'Nombre del barrio', key: 'barrio_nombre', width: 30 },
             { header: 'Nombre del puesto de votacion', key: 'puesto_nombre', width: 40 },
             { header: 'Mesa', key: 'mesa', width: 20 },
+            { header: 'Nombre Lider', key: 'nombre_lider', width: 30 },
           ]
           worksheet.getRow(1).font = { bold: true }
           worksheet.getRow(1).fill = {
@@ -181,6 +182,7 @@ export async function GET(request: NextRequest) {
       { header: 'Nombre del barrio', key: 'barrio_nombre', width: 30 },
       { header: 'Nombre del puesto de votacion', key: 'puesto_nombre', width: 40 },
       { header: 'Mesa', key: 'mesa', width: 20 },
+      { header: 'Nombre Lider', key: 'nombre_lider', width: 30 },
     ]
 
     // Style header row
@@ -191,6 +193,12 @@ export async function GET(request: NextRequest) {
       fgColor: { argb: 'FFE0E0E0' },
     }
     worksheet.getRow(1).height = 25
+
+    const nombreLider = (p: any) => {
+      const prof = p.profiles
+      if (!prof) return ''
+      return [prof.nombres, prof.apellidos].filter(Boolean).join(' ').trim() || ''
+    }
 
     // Add data rows
     transformedData.forEach((persona: any) => {
@@ -203,6 +211,7 @@ export async function GET(request: NextRequest) {
         barrio_nombre: persona.barrios?.nombre || '',
         puesto_nombre: persona.puestos_votacion?.nombre || '',
         mesa: persona.mesa_votacion || '',
+        nombre_lider: nombreLider(persona),
       })
     })
 
