@@ -244,7 +244,7 @@ export default function PersonasPage() {
       }
 
       const allPersonas = data.data || []
-      const total = allPersonas.length
+      const total = data.pagination?.total ?? allPersonas.length
       const datosFaltantes = allPersonas.filter((p: PersonaWithConfirmacion) => !p.puesto_votacion || !p.mesa_votacion).length
       const confirmadas = allPersonas.filter((p: PersonaWithConfirmacion) => 
         (p.puesto_votacion?.nombre || p.puesto_votacion) && p.mesa_votacion && 
