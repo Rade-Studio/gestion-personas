@@ -36,6 +36,23 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    const liderIds = (data || []).map((l: any) => l.id)
+    const companerosPorLider: Record<string, number> = {}
+    if (liderIds.length > 0) {
+      const counts = await Promise.all(
+        liderIds.map(async (id: string) => {
+          const { count } = await supabase
+            .from('personas')
+            .select('*', { count: 'exact', head: true })
+            .eq('registrado_por', id)
+          return { id, count: count ?? 0 }
+        })
+      )
+      counts.forEach(({ id, count }) => {
+        companerosPorLider[id] = count
+      })
+    }
+
     const workbook = new ExcelJS.Workbook()
     const worksheet = workbook.addWorksheet('Líderes')
 
@@ -48,6 +65,7 @@ export async function GET(request: NextRequest) {
       { header: 'Nombre del barrio', key: 'barrio_nombre', width: 30 },
       { header: 'Nombre del puesto de votación', key: 'puesto_nombre', width: 40 },
       { header: 'Mesa', key: 'mesa', width: 20 },
+      { header: 'Compañeros', key: 'companeros', width: 14 },
     ]
 
     worksheet.getRow(1).font = { bold: true }
@@ -68,6 +86,7 @@ export async function GET(request: NextRequest) {
         barrio_nombre: lider.barrio?.nombre || '',
         puesto_nombre: lider.puesto_votacion?.nombre || '',
         mesa: lider.mesa_votacion || '',
+        companeros: companerosPorLider[lider.id] ?? 0,
       })
     })
 
