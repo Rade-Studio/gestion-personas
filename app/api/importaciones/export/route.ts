@@ -112,17 +112,32 @@ export async function GET(request: NextRequest) {
       query = query.ilike('numero_documento', `%${numeroDocumento}%`)
     }
 
-    // Get all records (no pagination limit for export)
+    // Get all records: Supabase/PostgREST devuelve max 1000 por defecto; pedir explícitamente sin tope
+    const EXPORT_PAGE_SIZE = 1000
+    const allRows: any[] = []
+    let from = 0
+    let hasMore = true
+
     query = query.order('created_at', { ascending: false })
 
-    const { data, error } = await query
+    while (hasMore) {
+      const to = from + EXPORT_PAGE_SIZE - 1
+      const { data: pageData, error: pageError } = await query.range(from, to)
 
-    if (error) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: 500 }
-      )
+      if (pageError) {
+        return NextResponse.json(
+          { error: pageError.message },
+          { status: 500 }
+        )
+      }
+
+      const rows = pageData || []
+      allRows.push(...rows)
+      hasMore = rows.length === EXPORT_PAGE_SIZE
+      from += EXPORT_PAGE_SIZE
     }
+
+    const data = allRows
 
     // Transform data: convert voto_confirmaciones array to confirmacion object
     let transformedData = (data || []).map((persona: any) => {
